@@ -12,29 +12,26 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 1  — Financial Domain
+Milestone M1.2 — Order       (complete)
 Milestone M1.1 — Instrument  (complete)
 
 Phase 0  — Engineering Foundation
-Milestone M0.2 — Engineering Standards  (complete)
-Milestone M0.1 — Repository & Build System  (complete)
+Milestone M0.2 / M0.1        (complete)
 ```
 
 What exists today:
 
-- Go module, build/test/CI foundation
-- [Engineering standards](docs/engineering-standards.md) + ADRs 0001–0005
+- Engineering foundation + standards + ADRs 0001–0006
 - Domain primitives: `Price`, `Quantity`, `Money`, typed IDs, `Sequence`
-- **Instrument** domain: identity, symbol, currency, tick size, qty/price bounds, status
-- In-memory **InstrumentRegistry** (Register/Get/Exists/List)
-- Tick-aligned price conversion via integer modulo (`PriceFromMoney`)
+- **Instrument** + in-memory registry + tick/money conversion
+- **Order** model: side, type (LIMIT/MARKET), optional price, qty/remaining, status vocabulary, sequence
+- Structural `Order.Validate` + instrument-aware `ValidateAgainst`
 
 What does **not** exist yet (by design):
 
-- Orders, trades, order books, matching engine
-- Risk, accounts, positions
-- WAL / snapshots / recovery
-- Trading or market-data APIs
-- Docker / Kubernetes / distributed execution
+- Order lifecycle state machine (M1.3)
+- Trades/executions, order books, matching, risk
+- Accounts/positions, WAL, APIs, Docker/K8s
 
 ---
 
