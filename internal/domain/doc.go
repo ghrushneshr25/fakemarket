@@ -1,13 +1,17 @@
-// Package domain holds foundational FakeMarket domain primitives.
+// Package domain holds FakeMarket financial-domain types and rules.
 //
-// M0.2 defines types and engineering rules only. It does not implement
-// instruments, orders, books, matching, risk, or persistence.
+// Current scope:
+//   - M0.2 primitives: Price, Quantity, Money, typed IDs, Sequence
+//   - M1.1 Instrument, Currency, status, in-memory InstrumentRegistry
+//
+// Not in scope yet: orders, books, matching, risk, WAL, persistence.
 //
 // Rules of note:
-//   - No float32/float64 for authoritative financial state (Price, Quantity, Money).
+//   - No float32/float64 for authoritative financial state.
 //   - Identity types are distinct (OrderID ≠ TradeID ≠ …).
 //   - Sequence provides authoritative ordering; time.Time does not.
+//   - Price is ticks; Instrument.TickSize is Money per tick (ADR 0005).
 //   - Domain code must not import transport, OS env, or require a logger.
 //
-// See docs/engineering-standards.md and docs/adr/0002–0004.
+// See docs/engineering-standards.md and docs/adr/.
 package domain

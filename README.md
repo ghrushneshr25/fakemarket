@@ -11,6 +11,9 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
+Phase 1  — Financial Domain
+Milestone M1.1 — Instrument  (complete)
+
 Phase 0  — Engineering Foundation
 Milestone M0.2 — Engineering Standards  (complete)
 Milestone M0.1 — Repository & Build System  (complete)
@@ -18,16 +21,12 @@ Milestone M0.1 — Repository & Build System  (complete)
 
 What exists today:
 
-- Go module and repository layout
-- Thin application entrypoint with graceful shutdown
-- Configuration skeleton (environment + HTTP port)
-- Structured logging (`log/slog`)
-- HTTP health check (`GET /health`)
-- Makefile developer workflow
-- CI (format, vet, lint, test, build)
-- [Engineering standards](docs/engineering-standards.md) (binding constitution)
-- ADRs 0001–0004 (foundation, numbers, identity/sequence/time, errors/logging)
-- Domain primitives only: `Price`, `Quantity`, `Money`, typed IDs, `Sequence`
+- Go module, build/test/CI foundation
+- [Engineering standards](docs/engineering-standards.md) + ADRs 0001–0005
+- Domain primitives: `Price`, `Quantity`, `Money`, typed IDs, `Sequence`
+- **Instrument** domain: identity, symbol, currency, tick size, qty/price bounds, status
+- In-memory **InstrumentRegistry** (Register/Get/Exists/List)
+- Tick-aligned price conversion via integer modulo (`PriceFromMoney`)
 
 What does **not** exist yet (by design):
 
@@ -102,7 +101,7 @@ FAKEMARKET_ENV=staging FAKEMARKET_HTTP_PORT=9090 make run
 cmd/fakemarket/     Application entrypoint (thin)
 internal/config/    Configuration loading & validation
 internal/server/    Runtime lifecycle + health endpoint
-internal/domain/    Foundational primitives (IDs, numbers, sequence)
+internal/domain/    Primitives + Instrument + registry
 pkg/                Reserved for future public libraries (empty)
 test/               Future integration/system tests
 docs/               Engineering standards + ADRs
