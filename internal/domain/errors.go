@@ -45,4 +45,13 @@ var (
 	ErrCannotReject          = errors.New("cannot reject order")
 	ErrCannotCancel          = errors.New("cannot cancel order")
 	ErrCannotExpire          = errors.New("cannot expire order")
+
+	// Trade & Execution (M1.4)
+	ErrInvalidTrade           = errors.New("invalid trade")
+	ErrInvalidTradeID         = errors.New("invalid trade id")
+	ErrInvalidExecution       = errors.New("invalid execution")
+	ErrInvalidExecutionID     = errors.New("invalid execution id")
+	ErrSelfTrade              = errors.New("self-trade not allowed")
+	ErrTradeExecutionMismatch = errors.New("trade/execution mismatch")
+	ErrInvalidTimestamp       = errors.New("invalid timestamp")
 )

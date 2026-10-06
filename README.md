@@ -12,23 +12,23 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 1  — Financial Domain
-Milestone M1.3 — Order Lifecycle  (complete)
-Milestone M1.2 — Order            (complete)
-Milestone M1.1 — Instrument       (complete)
+Milestone M1.4 — Trade & Execution  (complete)
+Milestone M1.3 — Order Lifecycle    (complete)
+Milestone M1.2 — Order              (complete)
+Milestone M1.1 — Instrument         (complete)
 
 Phase 0  — Engineering Foundation  (complete)
 ```
 
 What exists today:
 
-- Engineering foundation + standards + ADRs 0001–0007
-- Instrument + Order model
-- **Order lifecycle state machine**: domain actions, fill/cancel/reject/expire, qty invariants
-- No unrestricted `SetStatus`; status/remaining unexported
+- Engineering foundation + ADRs 0001–0008
+- Instrument, Order, lifecycle
+- **Trade** + **Execution** (immutable; 1 trade → 2 executions; consistency checks)
 
 What does **not** exist yet (by design):
 
-- Trades/executions (M1.4), accounts/positions (M1.5)
+- Accounts/positions (M1.5)
 - Order books, matching, risk engine
 - WAL, APIs, Docker/K8s
 

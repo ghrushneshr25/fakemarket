@@ -14,3 +14,6 @@ type InstrumentID string
 
 // EventID uniquely identifies a journaled domain/application event.
 type EventID string
+
+// ExecutionID uniquely identifies an order-side execution (fill record).
+type ExecutionID string

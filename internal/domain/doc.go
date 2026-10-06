@@ -4,8 +4,10 @@
 //   - M0.2 primitives: Price, Quantity, Money, typed IDs, Sequence
 //   - M1.1 Instrument, Currency, status, in-memory InstrumentRegistry
 //   - M1.2 Order (LIMIT/MARKET), side, status vocabulary, ValidateAgainst
+//   - M1.3 Order lifecycle actions (fill/cancel/reject/…)
+//   - M1.4 Trade + Execution (immutable match facts)
 //
-// Not in scope yet: lifecycle engine, books, matching, risk, WAL, persistence.
+// Not in scope yet: accounts/positions, books, matching, risk, WAL, persistence.
 //
 // Rules of note:
 //   - No float32/float64 for authoritative financial state.
