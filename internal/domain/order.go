@@ -2,20 +2,16 @@ package domain
 
 import "fmt"
 
-// Order is a client's trading instruction.
+// Order is a client's trading instruction plus its lifecycle state.
 //
-// M1.2 defines the canonical data model and structural invariants only.
-// It does not implement lifecycle transitions, matching, risk, or persistence.
-//
-// Ownership (important):
-//   - An Order is mutable execution state (RemainingQuantity, Status will change later).
-//   - Mutation must be owned by a single writer (future execution worker), not by
-//     arbitrary goroutines and not via an embedded mutex on Order.
-//   - Do not treat independent copies as the same live order; copies can diverge.
+// Ownership:
+//   - Mutable fields (status, remaining) change only through lifecycle methods.
+//   - A single writer (future execution worker) owns mutation — no embedded mutex.
+//   - Do not treat independent copies as the same live order.
 //
 // Price presence:
-//   - LIMIT: Price is set (HasPrice() == true).
-//   - MARKET: Price is unset. Zero is never used as a "no price" sentinel.
+//   - LIMIT: price set (HasPrice() == true).
+//   - MARKET: price absent. Price(0) is zero ticks, not "missing".
 type Order struct {
 	ID           OrderID
 	AccountID    AccountID
@@ -26,17 +22,24 @@ type Order struct {
 	// price is non-nil only for LIMIT orders.
 	price *Price
 
-	Quantity          Quantity
-	RemainingQuantity Quantity
-	Status            OrderStatus
+	Quantity Quantity
+
+	// remaining is mutated only by lifecycle operations (ApplyFill, etc.).
+	remaining Quantity
+
+	// status is mutated only by lifecycle operations.
+	status OrderStatus
 
 	// Sequence is authoritative ordering metadata (not identity).
-	// Sequence 0 is reserved as unassigned and is invalid on a constructed Order.
+	// Sequence 0 is reserved as unassigned.
 	Sequence Sequence
+
+	// TerminalReason is optional audit text set on Reject/Cancel/Expire.
+	// Full event/WAL reasons are deferred; this is a lightweight domain note.
+	TerminalReason string
 }
 
-// OrderParams are inputs to NewOrder. Remaining quantity and initial status
-// are established by the constructor.
+// OrderParams are inputs to NewOrder.
 type OrderParams struct {
 	ID           OrderID
 	AccountID    AccountID
@@ -49,23 +52,21 @@ type OrderParams struct {
 	Sequence Sequence
 }
 
-// NewOrder constructs a structurally valid order.
-//
-// Sets:
+// NewOrder constructs a structurally valid order at RECEIVED.
 //
 //	RemainingQuantity = Quantity
 //	Status            = RECEIVED
 func NewOrder(p OrderParams) (Order, error) {
 	o := Order{
-		ID:                p.ID,
-		AccountID:         p.AccountID,
-		InstrumentID:      p.InstrumentID,
-		Side:              p.Side,
-		Type:              p.Type,
-		Quantity:          p.Quantity,
-		RemainingQuantity: p.Quantity,
-		Status:            OrderStatusReceived,
-		Sequence:          p.Sequence,
+		ID:           p.ID,
+		AccountID:    p.AccountID,
+		InstrumentID: p.InstrumentID,
+		Side:         p.Side,
+		Type:         p.Type,
+		Quantity:     p.Quantity,
+		remaining:    p.Quantity,
+		status:       OrderStatusReceived,
+		Sequence:     p.Sequence,
 	}
 	if p.Price != nil {
 		price := *p.Price
@@ -77,13 +78,16 @@ func NewOrder(p OrderParams) (Order, error) {
 	return o, nil
 }
 
+// Status returns the current lifecycle status.
+func (o Order) Status() OrderStatus { return o.status }
+
+// RemainingQuantity returns quantity still available to execute.
+func (o Order) RemainingQuantity() Quantity { return o.remaining }
+
 // HasPrice reports whether a limit price is present.
-func (o Order) HasPrice() bool {
-	return o.price != nil
-}
+func (o Order) HasPrice() bool { return o.price != nil }
 
 // Price returns the limit price and whether it is set.
-// For MARKET orders, ok is false.
 func (o Order) Price() (price Price, ok bool) {
 	if o.price == nil {
 		return 0, false
@@ -92,9 +96,8 @@ func (o Order) Price() (price Price, ok bool) {
 }
 
 // FilledQuantity is Quantity - RemainingQuantity.
-// Valid only while remaining invariants hold.
 func (o Order) FilledQuantity() Quantity {
-	return o.Quantity - o.RemainingQuantity
+	return o.Quantity - o.remaining
 }
 
 // Validate checks structural order invariants (instrument-independent).
@@ -117,14 +120,13 @@ func (o Order) Validate() error {
 	if o.Quantity <= 0 {
 		return fmt.Errorf("%w: %w: quantity must be > 0", ErrInvalidOrder, ErrInvalidQuantity)
 	}
-	if o.RemainingQuantity < 0 || o.RemainingQuantity > o.Quantity {
+	if o.remaining < 0 || o.remaining > o.Quantity {
 		return fmt.Errorf("%w: %w: remaining %d not in [0, %d]",
-			ErrInvalidOrder, ErrInvalidRemainingQty, o.RemainingQuantity, o.Quantity)
+			ErrInvalidOrder, ErrInvalidRemainingQty, o.remaining, o.Quantity)
 	}
-	if err := o.Status.Validate(); err != nil {
+	if err := o.status.Validate(); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidOrder, err)
 	}
-	// Sequence 0 is reserved (unassigned). Constructed orders require sequence >= 1.
 	if o.Sequence == 0 {
 		return fmt.Errorf("%w: %w: sequence 0 is unassigned", ErrInvalidOrder, ErrInvalidSequence)
 	}
@@ -143,16 +145,13 @@ func (o Order) Validate() error {
 		}
 	}
 
+	if err := o.checkStateQuantityInvariant(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidOrder, err)
+	}
 	return nil
 }
 
 // ValidateAgainst checks order fields that depend on instrument trading rules.
-//
-// Structural validity is checked first. The order's InstrumentID must match inst.ID.
-// MARKET orders skip price bounds/tick checks (they have no limit price).
-//
-// Does not check account existence, buying power, halt semantics beyond
-// instrument identity, or matching — those are later milestones.
 func (o Order) ValidateAgainst(inst Instrument) error {
 	if err := o.Validate(); err != nil {
 		return err
@@ -171,11 +170,39 @@ func (o Order) ValidateAgainst(inst Instrument) error {
 		if !ok {
 			return fmt.Errorf("%w: %w", ErrInvalidOrder, ErrMissingPrice)
 		}
-		// p is already in ticks — bounds only; alignment is inherent to Price ticks.
-		// If a caller built Price from money incorrectly, that is a construction bug;
-		// wire adapters must use Instrument.PriceFromMoney before NewOrder.
 		if err := inst.ValidatePrice(p); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// checkStateQuantityInvariant enforces status ↔ remaining relationships.
+func (o Order) checkStateQuantityInvariant() error {
+	switch o.status {
+	case OrderStatusReceived, OrderStatusValidating, OrderStatusRiskCheck, OrderStatusAccepted:
+		if o.remaining != o.Quantity {
+			return fmt.Errorf("%w: status %s requires remaining == quantity", ErrInvalidStateQuantity, o.status)
+		}
+	case OrderStatusResting:
+		if o.remaining <= 0 || o.remaining > o.Quantity {
+			return fmt.Errorf("%w: RESTING requires 0 < remaining <= quantity", ErrInvalidStateQuantity)
+		}
+	case OrderStatusPartiallyFilled:
+		if o.remaining <= 0 || o.remaining >= o.Quantity {
+			return fmt.Errorf("%w: PARTIALLY_FILLED requires 0 < remaining < quantity", ErrInvalidStateQuantity)
+		}
+	case OrderStatusFilled:
+		if o.remaining != 0 {
+			return fmt.Errorf("%w: FILLED requires remaining == 0", ErrInvalidStateQuantity)
+		}
+	case OrderStatusRejected:
+		if o.remaining != o.Quantity {
+			return fmt.Errorf("%w: REJECTED requires remaining == quantity (no fills)", ErrInvalidStateQuantity)
+		}
+	case OrderStatusCancelled, OrderStatusExpired:
+		if o.remaining < 0 || o.remaining > o.Quantity {
+			return fmt.Errorf("%w: terminal status remaining out of range", ErrInvalidStateQuantity)
 		}
 	}
 	return nil

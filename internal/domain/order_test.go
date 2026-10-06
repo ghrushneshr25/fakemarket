@@ -42,11 +42,11 @@ func TestNewOrder_LimitBuySell(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewOrder: %v", err)
 			}
-			if o.RemainingQuantity != 100 || o.Quantity != 100 {
-				t.Fatalf("qty/remaining = %d/%d", o.Quantity, o.RemainingQuantity)
+			if o.RemainingQuantity() != 100 || o.Quantity != 100 {
+				t.Fatalf("qty/remaining = %d/%d", o.Quantity, o.RemainingQuantity())
 			}
-			if o.Status != OrderStatusReceived {
-				t.Fatalf("status = %s", o.Status)
+			if o.Status() != OrderStatusReceived {
+				t.Fatalf("status = %s", o.Status())
 			}
 			if !o.HasPrice() {
 				t.Fatal("LIMIT must have price")
@@ -153,25 +153,28 @@ func TestOrder_RemainingQuantityInvariant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Simulate structural checks on mutated remaining (lifecycle not implemented).
+	// RECEIVED requires remaining == quantity; out-of-range remaining fails hard.
 	cases := []struct {
 		rem     Quantity
-		wantErr bool
+		wantErr error
 	}{
-		{100, false},
-		{0, false},
-		{50, false},
-		{-1, true},
-		{101, true},
+		{100, nil},
+		{0, ErrInvalidStateQuantity},  // RECEIVED + remaining 0
+		{50, ErrInvalidStateQuantity}, // RECEIVED + partial remaining
+		{-1, ErrInvalidRemainingQty},
+		{101, ErrInvalidRemainingQty},
 	}
 	for _, tc := range cases {
-		o.RemainingQuantity = tc.rem
+		o.remaining = tc.rem
 		err := o.Validate()
-		if tc.wantErr && !errors.Is(err, ErrInvalidRemainingQty) {
-			t.Fatalf("rem %d: got %v", tc.rem, err)
+		if tc.wantErr == nil {
+			if err != nil {
+				t.Fatalf("rem %d: unexpected %v", tc.rem, err)
+			}
+			continue
 		}
-		if !tc.wantErr && err != nil {
-			t.Fatalf("rem %d: unexpected %v", tc.rem, err)
+		if !errors.Is(err, tc.wantErr) {
+			t.Fatalf("rem %d: got %v, want %v", tc.rem, err, tc.wantErr)
 		}
 	}
 }
