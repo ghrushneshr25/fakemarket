@@ -54,7 +54,7 @@ check: fmt-check vet lint test build
 
 ## fmt-check: verify formatting without writing changes
 fmt-check:
-	@unformatted=$$($(GO) fmt ./...); \
+	@unformatted=$$(gofmt -l .); \
 	if [ -n "$$unformatted" ]; then \
 		echo "ERROR: the following files need formatting:"; \
 		echo "$$unformatted"; \
