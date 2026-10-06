@@ -48,5 +48,5 @@ tmp/
 temp/
 .tmp/
 
+# Personal study notes (not part of the product tree)
 .help/
-docs/

@@ -12,7 +12,8 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 0  — Engineering Foundation
-Milestone M0.1 — Repository & Build System
+Milestone M0.2 — Engineering Standards  (complete)
+Milestone M0.1 — Repository & Build System  (complete)
 ```
 
 What exists today:
@@ -24,7 +25,9 @@ What exists today:
 - HTTP health check (`GET /health`)
 - Makefile developer workflow
 - CI (format, vet, lint, test, build)
-- Architecture Decision Records under `docs/adr/`
+- [Engineering standards](docs/engineering-standards.md) (binding constitution)
+- ADRs 0001–0004 (foundation, numbers, identity/sequence/time, errors/logging)
+- Domain primitives only: `Price`, `Quantity`, `Money`, typed IDs, `Sequence`
 
 What does **not** exist yet (by design):
 
@@ -99,9 +102,10 @@ FAKEMARKET_ENV=staging FAKEMARKET_HTTP_PORT=9090 make run
 cmd/fakemarket/     Application entrypoint (thin)
 internal/config/    Configuration loading & validation
 internal/server/    Runtime lifecycle + health endpoint
+internal/domain/    Foundational primitives (IDs, numbers, sequence)
 pkg/                Reserved for future public libraries (empty)
 test/               Future integration/system tests
-docs/adr/           Architecture Decision Records
+docs/               Engineering standards + ADRs
 scripts/            Utility scripts
 .github/workflows/  CI
 ```
