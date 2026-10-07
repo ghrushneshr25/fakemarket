@@ -11,11 +11,8 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 2  — Order Book
-  M2.1 Price Level  (complete)
-  M2.2 Bid Book     (complete)
-  M2.3 Ask Book     (complete)
-  M2.4 Order Index  (complete)
+Phase 2  — Order Book  (complete)
+  M2.1–M2.5 PriceLevel · Bid · Ask · Index · OrderBook
 
 Phase 1  — Financial Domain  (complete)
 Phase 0  — Engineering Foundation  (complete)
@@ -24,12 +21,13 @@ Phase 0  — Engineering Foundation  (complete)
 What exists today:
 
 - P1 financial vocabulary
-- **PriceLevel** + **BidBook** + **AskBook** + **OrderIndex** (OrderID → location)
+- Full **OrderBook** (Bid + Ask + Index) for one instrument
+- Crossed books allowed; no matching yet
 - ADRs under local `docs/` (gitignored)
 
 What does **not** exist yet (by design):
 
-- Full OrderBook composition (M2.5), matching
+- Matching engine (P3)
 - Risk / BP / WAL / APIs
 
 ---

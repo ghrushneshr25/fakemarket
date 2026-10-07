@@ -25,4 +25,8 @@ var (
 	ErrInvalidOrderLocation = errors.New("invalid order location")
 	ErrOrderAlreadyIndexed  = errors.New("order already indexed")
 	ErrOrderNotIndexed      = errors.New("order not indexed")
+
+	ErrInvalidOrderBook      = errors.New("invalid order book")
+	ErrInvalidOrderBookOrder = errors.New("invalid order for order book")
+	ErrBookInvariant         = errors.New("order book invariant violated")
 )
