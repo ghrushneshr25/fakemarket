@@ -21,10 +21,13 @@ type Fill struct {
 	Quantity        domain.Quantity
 }
 
-// Result is the outcome of matching one incoming LIMIT order.
+// Result is the outcome of matching one incoming order.
 //
 // Fills are ordered in matching sequence (price-time). They are observations;
 // Order remaining/status remain authoritative via ApplyFill.
+//
+// MARKET orders never rest: any unfilled remainder is transitioned to EXPIRED
+// (liquidity exhausted / empty book). LIMIT remainders are left for orchestration.
 type Result struct {
 	Fills               []Fill
 	IncomingRemaining   domain.Quantity
@@ -47,24 +50,19 @@ func (r Result) ConservesIncoming(originalQty domain.Quantity) bool {
 
 // Match runs price-time priority matching of incoming against book.
 //
-// Mutates incoming and resting orders via Order.ApplyFill, and removes fully
-// consumed resting orders via OrderBook.Remove.
+// Supports LIMIT and MARKET.
 //
-// Self-trade: if the best opposing order shares AccountID, returns ErrSelfTrade
-// without applying that fill (prior fills in this call, if any, remain).
-// Does not rest remaining quantity on the book (orchestration later).
+// LIMIT: crosses only when price condition holds; remainder not rested here.
+// MARKET: no price; consumes best opposing liquidity until filled or exhausted;
+// unfilled remainder is EXPIRED (never RESTING / never on book).
+//
+// Self-trade: best opposing same AccountID → ErrSelfTrade (no skip deeper).
 func Match(incoming *domain.Order, ob *book.OrderBook) (Result, error) {
 	if incoming == nil || ob == nil {
 		return Result{}, fmt.Errorf("%w: nil incoming or book", ErrInvalidMatchInput)
 	}
 	if incoming.InstrumentID != ob.InstrumentID() {
 		return Result{}, fmt.Errorf("%w: instrument mismatch", ErrInvalidMatchInput)
-	}
-	if incoming.Type != domain.OrderTypeLimit {
-		return Result{}, fmt.Errorf("%w: only LIMIT in M3.1", ErrUnsupportedOrder)
-	}
-	if !incoming.HasPrice() {
-		return Result{}, fmt.Errorf("%w: limit order missing price", ErrInvalidMatchInput)
 	}
 	if incoming.RemainingQuantity() <= 0 {
 		return Result{}, fmt.Errorf("%w: nothing to match", ErrInvalidMatchInput)
@@ -73,19 +71,50 @@ func Match(incoming *domain.Order, ob *book.OrderBook) (Result, error) {
 	var fills []Fill
 	var err error
 
-	switch incoming.Side {
-	case domain.SideBuy:
-		fills, err = matchBuy(incoming, ob)
-	case domain.SideSell:
-		fills, err = matchSell(incoming, ob)
+	switch incoming.Type {
+	case domain.OrderTypeLimit:
+		if !incoming.HasPrice() {
+			return Result{}, fmt.Errorf("%w: limit order missing price", ErrInvalidMatchInput)
+		}
+		switch incoming.Side {
+		case domain.SideBuy:
+			fills, err = matchLimitBuy(incoming, ob)
+		case domain.SideSell:
+			fills, err = matchLimitSell(incoming, ob)
+		default:
+			return Result{}, fmt.Errorf("%w: side %s", ErrInvalidMatchInput, incoming.Side)
+		}
+	case domain.OrderTypeMarket:
+		if incoming.HasPrice() {
+			return Result{}, fmt.Errorf("%w: market order must not have price", ErrInvalidMatchInput)
+		}
+		switch incoming.Side {
+		case domain.SideBuy:
+			fills, err = matchMarketBuy(incoming, ob)
+		case domain.SideSell:
+			fills, err = matchMarketSell(incoming, ob)
+		default:
+			return Result{}, fmt.Errorf("%w: side %s", ErrInvalidMatchInput, incoming.Side)
+		}
 	default:
-		return Result{}, fmt.Errorf("%w: side %s", ErrInvalidMatchInput, incoming.Side)
+		return Result{}, fmt.Errorf("%w: type %s", ErrUnsupportedOrder, incoming.Type)
 	}
+
 	if err != nil {
 		return Result{
 			Fills:             fills,
 			IncomingRemaining: incoming.RemainingQuantity(),
 		}, err
+	}
+
+	// MARKET unfilled remainder cannot rest — expire terminal outcome.
+	if incoming.Type == domain.OrderTypeMarket && incoming.RemainingQuantity() > 0 {
+		if err := incoming.Expire("insufficient liquidity"); err != nil {
+			return Result{
+				Fills:             fills,
+				IncomingRemaining: incoming.RemainingQuantity(),
+			}, err
+		}
 	}
 
 	return Result{
@@ -95,16 +124,37 @@ func Match(incoming *domain.Order, ob *book.OrderBook) (Result, error) {
 	}, nil
 }
 
-func matchBuy(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
+func matchLimitBuy(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
 	incomingPrice, _ := incoming.Price()
-	var out []Fill
+	return matchAgainstAsks(incoming, ob, func(askPrice domain.Price) bool {
+		return incomingPrice >= askPrice
+	})
+}
 
+func matchLimitSell(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
+	incomingPrice, _ := incoming.Price()
+	return matchAgainstBids(incoming, ob, func(bidPrice domain.Price) bool {
+		return incomingPrice <= bidPrice
+	})
+}
+
+func matchMarketBuy(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
+	// Always crosses any ask while liquidity exists.
+	return matchAgainstAsks(incoming, ob, func(domain.Price) bool { return true })
+}
+
+func matchMarketSell(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
+	return matchAgainstBids(incoming, ob, func(domain.Price) bool { return true })
+}
+
+func matchAgainstAsks(incoming *domain.Order, ob *book.OrderBook, crosses func(domain.Price) bool) ([]Fill, error) {
+	var out []Fill
 	for incoming.RemainingQuantity() > 0 {
 		level, ok := ob.BestAsk()
 		if !ok {
 			break
 		}
-		if incomingPrice < level.Price() {
+		if !crosses(level.Price()) {
 			break
 		}
 		resting, ok := level.Front()
@@ -114,7 +164,6 @@ func matchBuy(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
 		if incoming.AccountID == resting.AccountID {
 			return out, ErrSelfTrade
 		}
-
 		m, err := applyMatch(incoming, resting, ob)
 		if err != nil {
 			return out, err
@@ -124,16 +173,14 @@ func matchBuy(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
 	return out, nil
 }
 
-func matchSell(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
-	incomingPrice, _ := incoming.Price()
+func matchAgainstBids(incoming *domain.Order, ob *book.OrderBook, crosses func(domain.Price) bool) ([]Fill, error) {
 	var out []Fill
-
 	for incoming.RemainingQuantity() > 0 {
 		level, ok := ob.BestBid()
 		if !ok {
 			break
 		}
-		if incomingPrice > level.Price() {
+		if !crosses(level.Price()) {
 			break
 		}
 		resting, ok := level.Front()
@@ -143,7 +190,6 @@ func matchSell(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
 		if incoming.AccountID == resting.AccountID {
 			return out, ErrSelfTrade
 		}
-
 		m, err := applyMatch(incoming, resting, ob)
 		if err != nil {
 			return out, err

@@ -3,5 +3,6 @@
 // M3.1: price-time priority for LIMIT orders against an OrderBook.
 // M3.2: partial-fill quantity/lifecycle invariants (FIFO preserved).
 // M3.3: Fill → Trade + two Executions (no account/WAL side effects).
-// Market orders, cancel APIs, and IOC/FOK come later.
+// M3.4: MARKET orders (no price, never rest, unfilled → EXPIRED).
+// Cancel APIs and IOC/FOK come later.
 package matching

@@ -277,15 +277,19 @@ func TestMatch_Deterministic(t *testing.T) {
 	}
 }
 
-func TestMatch_RejectMarket(t *testing.T) {
+func TestMatch_MarketEmptyStillSupported(t *testing.T) {
+	// MARKET is supported as of M3.4 (empty book → expire, no error).
 	ob, _ := book.NewOrderBook("AAPL")
 	o, _ := domain.NewOrder(domain.OrderParams{
 		ID: "M1", AccountID: "A", InstrumentID: "AAPL",
 		Side: domain.SideBuy, Type: domain.OrderTypeMarket, Quantity: 1, Sequence: 1,
 	})
 	_ = o.AdvanceToResting()
-	_, err := Match(&o, ob)
-	if !errors.Is(err, ErrUnsupportedOrder) {
+	res, err := Match(&o, ob)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if o.Status() != domain.OrderStatusExpired || len(res.Fills) != 0 {
+		t.Fatal(o.Status(), res)
 	}
 }
