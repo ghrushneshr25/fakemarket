@@ -21,4 +21,8 @@ var (
 	ErrInvalidAskOrder  = errors.New("invalid ask order")
 	ErrEmptyAskBook     = errors.New("ask book is empty")
 	ErrAskBookInvariant = errors.New("ask book invariant violated")
+
+	ErrInvalidOrderLocation = errors.New("invalid order location")
+	ErrOrderAlreadyIndexed  = errors.New("order already indexed")
+	ErrOrderNotIndexed      = errors.New("order not indexed")
 )

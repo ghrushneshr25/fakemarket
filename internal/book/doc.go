@@ -3,6 +3,7 @@
 // M2.1 PriceLevel — FIFO at one (instrument, side, price)
 // M2.2 BidBook    — BUY price ladder (high → low)
 // M2.3 AskBook    — SELL price ladder (low → high)
+// M2.4 OrderIndex — OrderID → (instrument, side, price)
 //
-// Order index and full order book come later.
+// Full OrderBook composition is M2.5.
 package book

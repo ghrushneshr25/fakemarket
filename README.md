@@ -15,6 +15,7 @@ Phase 2  — Order Book
   M2.1 Price Level  (complete)
   M2.2 Bid Book     (complete)
   M2.3 Ask Book     (complete)
+  M2.4 Order Index  (complete)
 
 Phase 1  — Financial Domain  (complete)
 Phase 0  — Engineering Foundation  (complete)
@@ -23,12 +24,12 @@ Phase 0  — Engineering Foundation  (complete)
 What exists today:
 
 - P1 financial vocabulary
-- **PriceLevel** + **BidBook** (high→low) + **AskBook** (low→high)
+- **PriceLevel** + **BidBook** + **AskBook** + **OrderIndex** (OrderID → location)
 - ADRs under local `docs/` (gitignored)
 
 What does **not** exist yet (by design):
 
-- Full OrderBook, order index, matching
+- Full OrderBook composition (M2.5), matching
 - Risk / BP / WAL / APIs
 
 ---
