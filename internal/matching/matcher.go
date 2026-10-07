@@ -17,10 +17,27 @@ type Fill struct {
 }
 
 // Result is the outcome of matching one incoming LIMIT order.
+//
+// Fills are ordered in matching sequence (price-time). They are observations;
+// Order remaining/status remain authoritative via ApplyFill.
 type Result struct {
 	Fills               []Fill
 	IncomingRemaining   domain.Quantity
 	IncomingFullyFilled bool
+}
+
+// FilledQuantity is the sum of fill quantities in this match invocation.
+func (r Result) FilledQuantity() domain.Quantity {
+	var sum domain.Quantity
+	for _, f := range r.Fills {
+		sum += f.Quantity
+	}
+	return sum
+}
+
+// ConservesIncoming reports whether sum(fills)+remaining equals originalQty.
+func (r Result) ConservesIncoming(originalQty domain.Quantity) bool {
+	return r.FilledQuantity()+r.IncomingRemaining == originalQty
 }
 
 // Match runs price-time priority matching of incoming against book.
@@ -137,24 +154,65 @@ func applyMatch(incoming, resting *domain.Order, ob *book.OrderBook) (Fill, erro
 		return Fill{}, fmt.Errorf("%w: resting order missing price", ErrInvalidMatchInput)
 	}
 
-	fillQty := incoming.RemainingQuantity()
-	if resting.RemainingQuantity() < fillQty {
-		fillQty = resting.RemainingQuantity()
+	// Precondition: identical fill quantity on both sides.
+	incRem := incoming.RemainingQuantity()
+	restRem := resting.RemainingQuantity()
+	if incRem <= 0 || restRem <= 0 {
+		return Fill{}, fmt.Errorf("%w: non-positive remaining", ErrInvalidMatchInput)
+	}
+	fillQty := incRem
+	if restRem < fillQty {
+		fillQty = restRem
 	}
 	if fillQty <= 0 {
 		return Fill{}, fmt.Errorf("%w: non-positive fill", ErrInvalidMatchInput)
 	}
+	if fillQty > incRem || fillQty > restRem {
+		return Fill{}, fmt.Errorf("%w: fill exceeds remaining", ErrInvalidMatchInput)
+	}
+
+	// Snapshot immutable identity fields (must not change across fill).
+	inID, inSeq := incoming.ID, incoming.Sequence
+	restID, restSeq := resting.ID, resting.Sequence
+	inPrice, _ := incoming.Price()
+	restPx := restingPrice
 
 	if err := incoming.ApplyFill(fillQty); err != nil {
-		return Fill{}, err
+		return Fill{}, fmt.Errorf("%w: incoming ApplyFill: %w", ErrInvalidMatchInput, err)
 	}
 	if err := resting.ApplyFill(fillQty); err != nil {
-		return Fill{}, err
+		return Fill{}, fmt.Errorf("%w: resting ApplyFill: %w", ErrInvalidMatchInput, err)
+	}
+
+	// Both sides received the same fillQty via ApplyFill.
+	if incoming.ID != inID || incoming.Sequence != inSeq {
+		return Fill{}, fmt.Errorf("%w: incoming identity mutated", ErrInvalidMatchInput)
+	}
+	if resting.ID != restID || resting.Sequence != restSeq {
+		return Fill{}, fmt.Errorf("%w: resting identity mutated", ErrInvalidMatchInput)
+	}
+	if p, ok := incoming.Price(); ok && p != inPrice {
+		return Fill{}, fmt.Errorf("%w: incoming price mutated", ErrInvalidMatchInput)
+	}
+	if p, ok := resting.Price(); !ok || p != restPx {
+		return Fill{}, fmt.Errorf("%w: resting price mutated", ErrInvalidMatchInput)
 	}
 
 	if resting.RemainingQuantity() == 0 {
+		if resting.Status() != domain.OrderStatusFilled {
+			return Fill{}, fmt.Errorf("%w: zero remaining not FILLED", ErrInvalidMatchInput)
+		}
 		if _, err := ob.Remove(resting.ID); err != nil {
 			return Fill{}, err
+		}
+	} else {
+		// Partial: must stay on book with PARTIALLY_FILLED (or still RESTING only if never
+		// partially filled — ApplyFill sets PARTIALLY_FILLED when remaining > 0 after fill).
+		if resting.Status() != domain.OrderStatusPartiallyFilled {
+			return Fill{}, fmt.Errorf("%w: partial resting status %s", ErrInvalidMatchInput, resting.Status())
+		}
+		if !ob.Contains(resting.ID) {
+			return Fill{}, fmt.Errorf("%w: partial resting not on book", ErrInvalidMatchInput)
 		}
 	}
 
