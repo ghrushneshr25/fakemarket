@@ -13,6 +13,7 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ```text
 Phase 2  — Order Book
   M2.1 Price Level  (complete)
+  M2.2 Bid Book     (complete)
 
 Phase 1  — Financial Domain  (complete)
 Phase 0  — Engineering Foundation  (complete)
@@ -20,13 +21,13 @@ Phase 0  — Engineering Foundation  (complete)
 
 What exists today:
 
-- P1 financial vocabulary (Instrument → Order → Trade → Account)
-- **PriceLevel** (`internal/book`): FIFO resting orders at one price
-- ADRs locally under `docs/` (gitignored)
+- P1 financial vocabulary
+- **PriceLevel** (FIFO) + **BidBook** (BUY ladder, high→low)
+- ADRs under local `docs/` (gitignored)
 
 What does **not** exist yet (by design):
 
-- Bid/Ask books, full order book, matching
+- AskBook, full OrderBook, order index, matching
 - Risk / BP / WAL / APIs
 
 ---
