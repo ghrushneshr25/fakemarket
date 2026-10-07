@@ -11,25 +11,24 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 1  — Financial Domain
-Milestone M1.4 — Trade & Execution  (complete)
-Milestone M1.3 — Order Lifecycle    (complete)
-Milestone M1.2 — Order              (complete)
-Milestone M1.1 — Instrument         (complete)
+Phase 1  — Financial Domain  (complete)
+  M1.1 Instrument · M1.2 Order · M1.3 Lifecycle
+  M1.4 Trade & Execution · M1.5 Account & Position
 
 Phase 0  — Engineering Foundation  (complete)
 ```
 
 What exists today:
 
-- Engineering foundation + ADRs 0001–0008
-- Instrument, Order, lifecycle
-- **Trade** + **Execution** (immutable; 1 trade → 2 executions; consistency checks)
+- Full P1 financial vocabulary (ADRs 0001–0009)
+- Instrument, Order, lifecycle, Trade, Execution
+- **Account** (cash credit/debit) + **Position** (qty, floor avg price)
+- Checked integer financial arithmetic
 
 What does **not** exist yet (by design):
 
-- Accounts/positions (M1.5)
-- Order books, matching, risk engine
+- Order books, matching engine
+- Buying power / reservations / risk (P4)
 - WAL, APIs, Docker/K8s
 
 ---

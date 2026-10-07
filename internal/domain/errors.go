@@ -54,4 +54,12 @@ var (
 	ErrSelfTrade              = errors.New("self-trade not allowed")
 	ErrTradeExecutionMismatch = errors.New("trade/execution mismatch")
 	ErrInvalidTimestamp       = errors.New("invalid timestamp")
+
+	// Account & Position (M1.5)
+	ErrInvalidAccount       = errors.New("invalid account")
+	ErrInvalidPosition      = errors.New("invalid position")
+	ErrInsufficientCash     = errors.New("insufficient cash")
+	ErrInsufficientPosition = errors.New("insufficient position")
+	ErrArithmeticOverflow   = errors.New("arithmetic overflow")
+	ErrInvalidMoneyAmount   = errors.New("invalid money amount")
 )
