@@ -14,6 +14,7 @@ FakeMarket models order processing, order books, matching, risk, financial state
 Phase 3  — Matching Engine
   M3.1 Price-Time Matching  (complete)
   M3.2 Partial Fills        (complete)
+  M3.3 Trade Generation     (complete)
 
 Phase 2  — Order Book  (complete)
 Phase 1  — Financial Domain  (complete)
@@ -22,13 +23,12 @@ Phase 0  — Engineering Foundation  (complete)
 
 What exists today:
 
-- Price-time matching with **explicit partial-fill invariants**
-  (FIFO preserved, conservation, ApplyFill authority)
-- Match facts only — no Trade/Execution objects yet
+- Match → **Trade + 2 Executions** (immutable, bilateral)
+- Explicit ID / sequence / clock providers for determinism
 
 What does **not** exist yet (by design):
 
-- Trade/Execution generation (M3.3), market orders, IOC/FOK
+- Market orders, cancel API, IOC/FOK, account updates on trade
 - Risk / BP / WAL / APIs
 
 ---
