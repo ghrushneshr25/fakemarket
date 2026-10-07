@@ -7,9 +7,14 @@ import (
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 )
 
-// Fill is one deterministic match against a resting order.
-// Trade/Execution objects are built later (M3.3) from these facts.
+// Fill is one deterministic bilateral match fact (not yet a Trade).
+//
+// BuyOrderID/SellOrderID are side-oriented for Trade generation.
+// IncomingOrderID/RestingOrderID identify aggressor vs book liquidity.
 type Fill struct {
+	BuyOrderID      domain.OrderID
+	SellOrderID     domain.OrderID
+	InstrumentID    domain.InstrumentID
 	IncomingOrderID domain.OrderID
 	RestingOrderID  domain.OrderID
 	Price           domain.Price // resting order price
@@ -216,7 +221,18 @@ func applyMatch(incoming, resting *domain.Order, ob *book.OrderBook) (Fill, erro
 		}
 	}
 
+	buyID, sellID := incoming.ID, resting.ID
+	if incoming.Side == domain.SideSell {
+		buyID, sellID = resting.ID, incoming.ID
+	}
+	if buyID == sellID {
+		return Fill{}, fmt.Errorf("%w: self-trade identity", ErrSelfTrade)
+	}
+
 	return Fill{
+		BuyOrderID:      buyID,
+		SellOrderID:     sellID,
+		InstrumentID:    incoming.InstrumentID,
 		IncomingOrderID: incoming.ID,
 		RestingOrderID:  resting.ID,
 		Price:           restingPrice,
