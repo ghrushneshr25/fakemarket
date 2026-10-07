@@ -11,23 +11,23 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 2  — Order Book  (complete)
-  M2.1–M2.5 PriceLevel · Bid · Ask · Index · OrderBook
+Phase 3  — Matching Engine
+  M3.1 Price-Time Matching  (complete)
 
+Phase 2  — Order Book  (complete)
 Phase 1  — Financial Domain  (complete)
 Phase 0  — Engineering Foundation  (complete)
 ```
 
 What exists today:
 
-- P1 financial vocabulary
-- Full **OrderBook** (Bid + Ask + Index) for one instrument
-- Crossed books allowed; no matching yet
-- ADRs under local `docs/` (gitignored)
+- P1–P2 domain + full OrderBook
+- **MatchingEngine** (LIMIT price-time priority, self-trade guard)
+- Match facts only — no Trade/Execution objects yet
 
 What does **not** exist yet (by design):
 
-- Matching engine (P3)
+- Trade/Execution generation (M3.3), market orders, IOC/FOK
 - Risk / BP / WAL / APIs
 
 ---
