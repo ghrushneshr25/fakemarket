@@ -16,4 +16,9 @@ var (
 	ErrOrderNotInBook   = errors.New("order not found in book")
 	ErrEmptyBidBook     = errors.New("bid book is empty")
 	ErrBidBookInvariant = errors.New("bid book invariant violated")
+
+	ErrInvalidAskBook   = errors.New("invalid ask book")
+	ErrInvalidAskOrder  = errors.New("invalid ask order")
+	ErrEmptyAskBook     = errors.New("ask book is empty")
+	ErrAskBookInvariant = errors.New("ask book invariant violated")
 )
