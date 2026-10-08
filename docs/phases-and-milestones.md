@@ -659,7 +659,7 @@ Shorts, realized/unrealized P&L, settlement, BP
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Max quantity of a single order (per account+instrument) |
 | **Code** | `internal/domain/order_limit.go` |
 | **ADR** | [0026](./adr/0026-order-limits.md) |
