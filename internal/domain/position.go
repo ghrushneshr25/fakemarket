@@ -4,27 +4,29 @@ import "fmt"
 
 // Position is an account's net holding in one instrument.
 //
-// Quantity is non-negative (no shorts in M1.5). AveragePrice is the average
-// acquisition price in ticks for the current open holding.
+// Quantity is non-negative (no shorts). AveragePrice is the floor-weighted
+// average acquisition price in ticks for the open holding.
 //
-// Rounding policy (ADR 0009): weighted average uses integer division (floor
-// toward zero for non-negative costs/quantities).
+// P4.2: position accounting only — no P&L, cash mutation, shorts, or BP.
+//
+// Mutations return a new Position value; callers assign on success so failures
+// never partially update state.
 type Position struct {
 	InstrumentID InstrumentID
 	Quantity     Quantity
 	AveragePrice Price
 }
 
-// NewPosition creates a position from an opening buy (quantity > 0).
+// NewPosition creates an open position (quantity > 0, acquisition price > 0).
 func NewPosition(instrumentID InstrumentID, qty Quantity, price Price) (Position, error) {
 	if instrumentID == "" {
 		return Position{}, fmt.Errorf("%w: missing instrument id", ErrInvalidPosition)
 	}
 	if qty <= 0 {
-		return Position{}, fmt.Errorf("%w: opening quantity must be > 0", ErrInvalidPosition)
+		return Position{}, fmt.Errorf("%w: %w: opening quantity must be > 0", ErrInvalidPosition, ErrInvalidQuantity)
 	}
-	if price < 0 {
-		return Position{}, fmt.Errorf("%w: price must be >= 0", ErrInvalidPosition)
+	if price <= 0 {
+		return Position{}, fmt.Errorf("%w: acquisition price must be > 0", ErrInvalidPosition)
 	}
 	p := Position{InstrumentID: instrumentID, Quantity: qty, AveragePrice: price}
 	if err := p.Validate(); err != nil {
@@ -33,7 +35,7 @@ func NewPosition(instrumentID InstrumentID, qty Quantity, price Price) (Position
 	return p, nil
 }
 
-// EmptyPosition is a closed holding (qty 0, avg 0) for instrumentID.
+// EmptyPosition is the canonical closed holding: qty 0, avg 0.
 func EmptyPosition(instrumentID InstrumentID) Position {
 	return Position{InstrumentID: instrumentID, Quantity: 0, AveragePrice: 0}
 }
@@ -52,31 +54,33 @@ func (p Position) Validate() error {
 		}
 		return nil
 	}
-	if p.AveragePrice < 0 {
-		return fmt.Errorf("%w: average price must be >= 0", ErrInvalidPosition)
+	if p.AveragePrice <= 0 {
+		return fmt.Errorf("%w: open position average price must be > 0", ErrInvalidPosition)
 	}
 	return nil
 }
 
 // IsEmpty reports whether the position has no holdings.
-func (p Position) IsEmpty() bool {
-	return p.Quantity == 0
+func (p Position) IsEmpty() bool { return p.Quantity == 0 }
+
+// Increase adds quantity at an acquisition price (ticks). Alias of Add.
+func (p Position) Increase(qty Quantity, price Price) (Position, error) {
+	return p.Add(qty, price)
 }
 
 // Add increases the position at the given acquisition price (ticks).
-// Failed calculations leave the original position unchanged (caller must assign result).
+// Uses floor((oldQ×oldAvg + addQ×price) / newQ) with checked mul/add.
 func (p Position) Add(qty Quantity, price Price) (Position, error) {
 	if qty <= 0 {
-		return Position{}, fmt.Errorf("%w: add quantity must be > 0", ErrInvalidPosition)
+		return Position{}, fmt.Errorf("%w: %w: add quantity must be > 0", ErrInvalidPosition, ErrInvalidQuantity)
 	}
-	if price < 0 {
-		return Position{}, fmt.Errorf("%w: price must be >= 0", ErrInvalidPosition)
+	if price <= 0 {
+		return Position{}, fmt.Errorf("%w: acquisition price must be > 0", ErrInvalidPosition)
 	}
 	if p.InstrumentID == "" {
 		return Position{}, fmt.Errorf("%w: missing instrument id", ErrInvalidPosition)
 	}
 
-	// Opening or reopening from empty.
 	if p.Quantity == 0 {
 		out := Position{InstrumentID: p.InstrumentID, Quantity: qty, AveragePrice: price}
 		return out, out.Validate()
@@ -98,8 +102,7 @@ func (p Position) Add(qty Quantity, price Price) (Position, error) {
 	if err != nil {
 		return Position{}, fmt.Errorf("%w: quantity: %w", ErrInvalidPosition, err)
 	}
-	// Floor division for non-negative totals.
-	avg := Price(totalCost / newQty)
+	avg := Price(totalCost / newQty) // floor for non-negative
 	out := Position{
 		InstrumentID: p.InstrumentID,
 		Quantity:     Quantity(newQty),
@@ -115,7 +118,7 @@ func (p Position) Add(qty Quantity, price Price) (Position, error) {
 // Full close resets average price to 0.
 func (p Position) Reduce(qty Quantity) (Position, error) {
 	if qty <= 0 {
-		return Position{}, fmt.Errorf("%w: reduce quantity must be > 0", ErrInvalidPosition)
+		return Position{}, fmt.Errorf("%w: %w: reduce quantity must be > 0", ErrInvalidPosition, ErrInvalidQuantity)
 	}
 	if qty > p.Quantity {
 		return Position{}, fmt.Errorf("%w: reduce %d > position %d", ErrInsufficientPosition, qty, p.Quantity)

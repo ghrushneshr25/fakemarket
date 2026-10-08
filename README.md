@@ -12,7 +12,8 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 4  — Accounts & Risk
-  P4.1 Balance  (complete)
+  P4.1 Balance   (complete)
+  P4.2 Position  (complete)
 
 Phase 3  — Matching Engine  (complete)
 Phase 2–0  (complete)
@@ -21,7 +22,7 @@ Phase 2–0  (complete)
 What exists today:
 
 - Full matching + deterministic replay (P3)
-- **Balance**: currency-scoped cash with checked credit/debit
+- **Balance** + **Position** (floor weighted avg, no shorts)
 
 What does **not** exist yet (by design):
 

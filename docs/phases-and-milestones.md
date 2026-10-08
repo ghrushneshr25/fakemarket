@@ -550,13 +550,13 @@ Disk WAL, snapshots, crash recovery from durable storage
 
 Financial constraints on order acceptance: balances → positions → buying power → limits → reservations.
 
-### Phase status: 🔧 In progress (P4.1 ✅)
+### Phase status: 🔧 In progress (P4.1–P4.2 ✅)
 
 ### Roadmap
 
 ```text
 P4.1 Balance          ✅
-P4.2 Position         ⏳  (refine M1.5 for risk path)
+P4.2 Position         ✅
 P4.3 Buying Power     ⏳
 P4.4 Position Limits  ⏳
 P4.5 Order Limits     ⏳
@@ -588,6 +588,31 @@ P4.7 Reservation Model ⏳
 ### Out of scope
 
 Buying power, reservations, fees, settlement, multi-currency FX, concurrency
+
+---
+
+## P4.2 — Position
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Non-negative holdings + floor weighted average price |
+| **Code** | `internal/domain/position.go`, Account position APIs |
+| **ADR** | [0023](./adr/0023-position-model.md) |
+
+### Requirements
+
+1. Position: InstrumentID, Quantity ≥ 0, AveragePrice (ticks)  
+2. Zero position ⇒ avg 0  
+3. Increase: floor weighted average; checked mul/add  
+4. Reduce: keep avg; full close resets avg  
+5. Over-reduce / zero / negative mutations rejected  
+6. Acquisition price > 0  
+7. No shorts, P&L, cash mutation, Trade coupling  
+
+### Out of scope
+
+Shorts, realized/unrealized P&L, settlement, BP
 
 ---
 
@@ -721,14 +746,14 @@ Buying power, reservations, fees, settlement, multi-currency FX, concurrency
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | 🔧 | P4.1 ✅; next P4.2 Position |
+| P4 Risk | 🔧 | P4.1–P4.2 ✅; next P4.3 Buying Power |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P4.2 Position → BP → Limits → Reservations → P5 WAL
+Next:   P4.3 Buying Power → Limits → Reservations → P5 WAL
 ```
 
 ---
@@ -740,4 +765,4 @@ Next:   P4.2 Position → BP → Limits → Reservations → P5 WAL
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4.1 Balance complete.
+**Last updated:** 2026-09-30 — P4.2 Position complete.
