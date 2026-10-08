@@ -6,5 +6,5 @@
 // M3.4: MARKET orders (no price, never rest, unfilled → EXPIRED).
 // M3.5: Cancel resting/partial orders (book removal + CANCELLED).
 // M3.6: TimeInForce IOC/FOK on LIMIT (FOK preflight, zero mutation on fail).
-// Deterministic replay comes later (M3.7).
+// M3.7: Deterministic replay of authoritative commands (not generated trades).
 package matching

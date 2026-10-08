@@ -12,4 +12,7 @@ var (
 
 	ErrOrderNotFound       = errors.New("order not found")
 	ErrOrderNotCancellable = errors.New("order not cancellable")
+
+	ErrInvalidReplay    = errors.New("invalid replay")
+	ErrReplayDivergence = errors.New("replay divergence")
 )

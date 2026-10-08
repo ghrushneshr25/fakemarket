@@ -370,7 +370,7 @@ Full order/book/matching implementations
 | P3.6 | IOC/FOK time-in-force |
 | P3.7 | Deterministic replay of match stream |
 
-### Phase status: 🔧 M3.1–M3.6 ✅ · M3.7 ⏳
+### Phase status: ✅ Complete
 
 ---
 
@@ -522,20 +522,25 @@ Full order/book/matching implementations
 
 | | |
 |--|--|
-| **Status** | ⏳ |
+| **Status** | ✅ |
 | **Objective** | Same ordered inputs → same fills, trades, sequences, book |
+| **Code** | `engine.go`, `command.go`, `state.go`, `clock.go`, `replay_test.go` |
+| **ADR** | [0021](./adr/0021-deterministic-replay.md) |
 
-### Requirements (planned)
+### Requirements
 
-1. Command log or input stream of match/cancel/submit events  
-2. Replay produces identical OrderBook, fills, Trade/Execution sequences  
-3. No wall-clock dependence in match path (inject clock already)  
-4. Property tests: replay(A) == original state after A  
-5. Document non-determinism sources forbidden (map iteration, goroutine races, etc.)  
+1. Authoritative input = `SUBMIT_ORDER` / `CANCEL_ORDER` commands (not generated Trades)  
+2. Fresh Engine + production Match/Cancel/TradeGenerator  
+3. Deterministic CounterIDs, CounterSeq, MutableClock (per-command timestamps)  
+4. CanonicalState semantic compare (orders, books FIFO, trades, execs, outcomes)  
+5. Failed commands remain in stream; error kinds compared  
+6. FOK failure still 0 trades / no phantom IDs  
+7. GTC remainder rested via Engine submit path for complete book state  
+8. **Not WAL** — in-memory only  
 
-### Out of scope (until P5)
+### Out of scope (P5)
 
-Full WAL file format, crash recovery from disk (that’s P5; M3.7 is engine-level determinism)
+Disk WAL, snapshots, crash recovery from durable storage
 
 ---
 
@@ -711,4 +716,4 @@ Next:   M3.7 Replay → P4 Risk → P5 WAL → P6 API
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — full requirements documentation for P0–P10; P3 through M3.6 complete.
+**Last updated:** 2026-09-30 — P3 complete through M3.7 Deterministic Replay.
