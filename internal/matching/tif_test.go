@@ -231,3 +231,92 @@ func TestMarket_IOC_Unsupported(t *testing.T) {
 		t.Fatal("expected construction error", o)
 	}
 }
+
+func limitSellTIF(t *testing.T, id, acc string, price domain.Price, qty domain.Quantity, seq domain.Sequence, tif domain.TimeInForce) *domain.Order {
+	t.Helper()
+	p := price
+	o, err := domain.NewOrder(domain.OrderParams{
+		ID: domain.OrderID(id), AccountID: domain.AccountID(acc), InstrumentID: "AAPL",
+		Side: domain.SideSell, Type: domain.OrderTypeLimit, TimeInForce: tif, Price: &p, Quantity: qty, Sequence: seq,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := o.AdvanceToResting(); err != nil {
+		t.Fatal(err)
+	}
+	return &o
+}
+
+func TestIOC_SellPartial(t *testing.T) {
+	ob := bookWith(t,
+		rest(t, "B1", "A", domain.SideBuy, 105, 20, 1),
+		rest(t, "B2", "A", domain.SideBuy, 104, 30, 2),
+		rest(t, "B3", "A", domain.SideBuy, 100, 50, 3),
+	)
+	sell := limitSellTIF(t, "IOC-S", "B", 104, 70, 10, domain.TIFIOC)
+	res, err := Match(sell, ob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 20@105 + 30@104 = 50; 100 does not cross limit 104
+	if res.FilledQuantity() != 50 {
+		t.Fatal(res.FilledQuantity())
+	}
+	if sell.Status() != domain.OrderStatusCancelled || sell.RemainingQuantity() != 20 {
+		t.Fatal(sell.Status(), sell.RemainingQuantity())
+	}
+	if ob.Contains("IOC-S") {
+		t.Fatal()
+	}
+}
+
+func TestFOK_SellSuccessAndFail(t *testing.T) {
+	ob := bookWith(t,
+		rest(t, "B1", "A", domain.SideBuy, 105, 20, 1),
+		rest(t, "B2", "A", domain.SideBuy, 104, 30, 2),
+	)
+	ok := limitSellTIF(t, "FOK-S-OK", "B", 104, 50, 3, domain.TIFFOK)
+	res, err := Match(ok, ob)
+	if err != nil || res.FilledQuantity() != 50 || ok.Status() != domain.OrderStatusFilled {
+		t.Fatal(err, res, ok.Status())
+	}
+
+	ob2 := bookWith(t,
+		rest(t, "B3", "A", domain.SideBuy, 105, 20, 1),
+		rest(t, "B4", "A", domain.SideBuy, 104, 30, 2),
+	)
+	fail := limitSellTIF(t, "FOK-S-FAIL", "B", 104, 51, 4, domain.TIFFOK)
+	_, aq, il := snapshotBook(ob2)
+	res2, err := Match(fail, ob2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res2.Fills) != 0 || fail.Status() != domain.OrderStatusCancelled {
+		t.Fatal(res2, fail.Status())
+	}
+	_, aq2, il2 := snapshotBook(ob2)
+	if aq != aq2 || il != il2 {
+		t.Fatal("FOK sell fail mutated book")
+	}
+}
+
+func TestGTC_LimitUnchanged(t *testing.T) {
+	// Default TIF is GTC — remainder not auto-cancelled by Match
+	ob := bookWith(t, rest(t, "S1", "B", domain.SideSell, 100, 30, 1))
+	buy := limitBuyTIF(t, "GTC1", "ACC-GTC", 100, 100, 2, domain.TIFGTC)
+	res, err := Match(buy, ob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FilledQuantity() != 30 || buy.RemainingQuantity() != 70 {
+		t.Fatal(res, buy.RemainingQuantity())
+	}
+	// GTC does not Cancel remainder in Match
+	if buy.Status() == domain.OrderStatusCancelled {
+		t.Fatal("GTC should not auto-cancel remainder")
+	}
+	if buy.Status() != domain.OrderStatusPartiallyFilled {
+		t.Fatal(buy.Status())
+	}
+}
