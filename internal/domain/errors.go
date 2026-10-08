@@ -79,4 +79,8 @@ var (
 	ErrInvalidPositionLimit  = errors.New("invalid position limit")
 	ErrPositionLimitExceeded = errors.New("position limit exceeded")
 	ErrQuantityOverflow      = errors.New("quantity overflow") // current+qty cannot be represented
+
+	// Order limits (P4.5)
+	ErrInvalidOrderLimit  = errors.New("invalid order limit")
+	ErrOrderLimitExceeded = errors.New("order limit exceeded")
 )

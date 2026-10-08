@@ -550,7 +550,7 @@ Disk WAL, snapshots, crash recovery from durable storage
 
 Financial constraints on order acceptance: balances → positions → buying power → limits → reservations.
 
-### Phase status: 🔧 In progress (P4.1–P4.4 ✅)
+### Phase status: 🔧 In progress (P4.1–P4.5 ✅)
 
 ### Roadmap
 
@@ -559,7 +559,7 @@ P4.1 Balance          ✅
 P4.2 Position         ✅
 P4.3 Buying Power     ✅
 P4.4 Position Limits  ✅
-P4.5 Order Limits     ⏳
+P4.5 Order Limits     ✅
 P4.6 Price Bands      ⏳
 P4.7 Reservation Model ⏳
 ```
@@ -652,6 +652,26 @@ Shorts, realized/unrealized P&L, settlement, BP
 3. BUY checks **resulting** position (current+qty)  
 4. SELL uses ownership, not limit increase  
 5. Pure query; separate from BP; overflow fail-closed  
+
+---
+
+## P4.5 — Order Limits
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Max quantity of a single order (per account+instrument) |
+| **Code** | `internal/domain/order_limit.go` |
+| **ADR** | [0026](./adr/0026-order-limits.md) |
+
+### Requirements
+
+1. Account+Instrument → optional MaxOrderQuantity  
+2. Missing = unlimited; 0 = no order permitted  
+3. `order.Quantity <= max` (inclusive); BUY and SELL same  
+4. LIMIT and MARKET same; **no** price/position/BP  
+5. Not aggregate open-order exposure (that is P4.7)  
+6. Pure query; dedicated `ErrOrderLimitExceeded`  
 
 ---
 
@@ -785,14 +805,14 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | 🔧 | P4.1–P4.4 ✅; next P4.5 Order Limits |
+| P4 Risk | 🔧 | P4.1–P4.5 ✅; next P4.6 Price Bands |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P4.5 Order Limits → P4.6 Bands → P4.7 Reservations → P5 WAL
+Next:   P4.6 Price Bands → P4.7 Reservations → P5 WAL
 ```
 
 ---
@@ -804,4 +824,4 @@ Next:   P4.5 Order Limits → P4.6 Bands → P4.7 Reservations → P5 WAL
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4.4 Position Limits complete.
+**Last updated:** 2026-09-30 — P4.5 Order Limits complete.
