@@ -48,6 +48,15 @@ func CheckedMulPriceQty(p Price, q Quantity) (int64, error) {
 	return checkedMulInt64(int64(p), int64(q))
 }
 
+// CheckedMulMoneyQty multiplies money (minor units) by quantity.
+func CheckedMulMoneyQty(m Money, q Quantity) (Money, error) {
+	prod, err := checkedMulInt64(int64(m), int64(q))
+	if err != nil {
+		return 0, fmt.Errorf("%w: money×qty", ErrNotionalOverflow)
+	}
+	return Money(prod), nil
+}
+
 func checkedAddInt64(a, b int64) (int64, error) {
 	sum := a + b
 	// Overflow if same-sign operands produce opposite-sign sum.

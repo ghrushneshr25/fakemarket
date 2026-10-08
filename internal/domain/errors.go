@@ -68,4 +68,10 @@ var (
 	ErrInvalidMoneyAmount   = errors.New("invalid money amount")
 	ErrInvalidAmount        = errors.New("invalid amount")
 	ErrCurrencyMismatch     = errors.New("currency mismatch")
+
+	// Buying power (P4.3)
+	ErrInsufficientBuyingPower = errors.New("insufficient buying power")
+	ErrNotionalOverflow        = errors.New("notional overflow")
+	ErrReferencePriceRequired  = errors.New("reference price required")
+	ErrBuyingPower             = errors.New("buying power check failed")
 )

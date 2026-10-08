@@ -550,14 +550,14 @@ Disk WAL, snapshots, crash recovery from durable storage
 
 Financial constraints on order acceptance: balances → positions → buying power → limits → reservations.
 
-### Phase status: 🔧 In progress (P4.1–P4.2 ✅)
+### Phase status: 🔧 In progress (P4.1–P4.3 ✅)
 
 ### Roadmap
 
 ```text
 P4.1 Balance          ✅
 P4.2 Position         ✅
-P4.3 Buying Power     ⏳
+P4.3 Buying Power     ✅
 P4.4 Position Limits  ⏳
 P4.5 Order Limits     ⏳
 P4.6 Price Bands      ⏳
@@ -613,6 +613,26 @@ Buying power, reservations, fees, settlement, multi-currency FX, concurrency
 ### Out of scope
 
 Shorts, realized/unrealized P&L, settlement, BP
+
+---
+
+## P4.3 — Buying Power
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Pure affordability query (no reservations) |
+| **Code** | `internal/domain/buying_power.go` |
+| **ADR** | [0024](./adr/0024-buying-power.md) |
+
+### Requirements
+
+1. BUY capacity = Cash (Reserved=0)  
+2. LIMIT BUY notional = qty × limit price (money)  
+3. MARKET BUY requires reference price  
+4. SELL capacity = owned position qty  
+5. No mutation; no book dependency; checked notional  
+6. No fees/margin/FX/reservations  
 
 ---
 
@@ -746,14 +766,14 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | 🔧 | P4.1–P4.2 ✅; next P4.3 Buying Power |
+| P4 Risk | 🔧 | P4.1–P4.3 ✅; next P4.4 Position Limits |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P4.3 Buying Power → Limits → Reservations → P5 WAL
+Next:   P4.4–P4.6 Limits → P4.7 Reservations → P5 WAL
 ```
 
 ---
@@ -765,4 +785,4 @@ Next:   P4.3 Buying Power → Limits → Reservations → P5 WAL
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4.2 Position complete.
+**Last updated:** 2026-09-30 — P4.3 Buying Power complete.
