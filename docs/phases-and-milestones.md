@@ -640,7 +640,7 @@ Shorts, realized/unrealized P&L, settlement, BP
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Max long qty per account+instrument |
 | **Code** | `internal/domain/position_limit.go` |
 | **ADR** | [0025](./adr/0025-position-limits.md) |
