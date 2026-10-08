@@ -550,7 +550,7 @@ Disk WAL, snapshots, crash recovery from durable storage
 
 Financial constraints on order acceptance: balances → positions → buying power → limits → reservations.
 
-### Phase status: 🔧 In progress (P4.1–P4.3 ✅)
+### Phase status: 🔧 In progress (P4.1–P4.4 ✅)
 
 ### Roadmap
 
@@ -558,7 +558,7 @@ Financial constraints on order acceptance: balances → positions → buying pow
 P4.1 Balance          ✅
 P4.2 Position         ✅
 P4.3 Buying Power     ✅
-P4.4 Position Limits  ⏳
+P4.4 Position Limits  ✅
 P4.5 Order Limits     ⏳
 P4.6 Price Bands      ⏳
 P4.7 Reservation Model ⏳
@@ -633,6 +633,25 @@ Shorts, realized/unrealized P&L, settlement, BP
 4. SELL capacity = owned position qty  
 5. No mutation; no book dependency; checked notional  
 6. No fees/margin/FX/reservations  
+
+---
+
+## P4.4 — Position Limits
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Max long qty per account+instrument |
+| **Code** | `internal/domain/position_limit.go` |
+| **ADR** | [0025](./adr/0025-position-limits.md) |
+
+### Requirements
+
+1. Account+Instrument → optional MaxQuantity  
+2. Missing = unlimited; 0 = cannot hold  
+3. BUY checks **resulting** position (current+qty)  
+4. SELL uses ownership, not limit increase  
+5. Pure query; separate from BP; overflow fail-closed  
 
 ---
 
@@ -766,14 +785,14 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | 🔧 | P4.1–P4.3 ✅; next P4.4 Position Limits |
+| P4 Risk | 🔧 | P4.1–P4.4 ✅; next P4.5 Order Limits |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P4.4–P4.6 Limits → P4.7 Reservations → P5 WAL
+Next:   P4.5 Order Limits → P4.6 Bands → P4.7 Reservations → P5 WAL
 ```
 
 ---
@@ -785,4 +804,4 @@ Next:   P4.4–P4.6 Limits → P4.7 Reservations → P5 WAL
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4.3 Buying Power complete.
+**Last updated:** 2026-09-30 — P4.4 Position Limits complete.

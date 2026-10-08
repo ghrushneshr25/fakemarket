@@ -12,7 +12,7 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 4  — Accounts & Risk
-  P4.1–P4.3 Balance · Position · Buying Power  (complete)
+  P4.1–P4.4 Balance · Position · BP · Position Limits  (complete)
 
 Phase 3  — Matching Engine  (complete)
 Phase 2–0  (complete)
@@ -21,11 +21,11 @@ Phase 2–0  (complete)
 What exists today:
 
 - Matching + replay (P3)
-- Cash, positions, **buying-power affordability** (pure query)
+- Cash, positions, buying power, **position limits** (pure checks)
 
 What does **not** exist yet (by design):
 
-- Reservations, position/order/price limits (later P4)
+- Order/price limits, reservations (later P4)
 - WAL, trading APIs (P5+)
 
 

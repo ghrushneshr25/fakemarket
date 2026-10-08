@@ -74,4 +74,8 @@ var (
 	ErrNotionalOverflow        = errors.New("notional overflow")
 	ErrReferencePriceRequired  = errors.New("reference price required")
 	ErrBuyingPower             = errors.New("buying power check failed")
+
+	// Position limits (P4.4)
+	ErrInvalidPositionLimit  = errors.New("invalid position limit")
+	ErrPositionLimitExceeded = errors.New("position limit exceeded")
 )
