@@ -11,21 +11,18 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 3  — Matching Engine
-  M3.1–M3.6 … + IOC/FOK  (complete)
-  M3.7 Deterministic Replay  ⏳
-
+Phase 3  — Matching Engine  (complete)  M3.1–M3.7
 Phase 2–0  (complete)
 ```
 
 What exists today:
 
-- LIMIT/MARKET match, trades, cancel
-- **TimeInForce**: GTC, IOC, FOK (FOK preflight, zero mutation on fail)
+- Full matching: LIMIT/MARKET, IOC/FOK, cancel, Trade+Executions
+- **Deterministic replay** of SUBMIT/CANCEL command streams
 
 What does **not** exist yet (by design):
 
-- Deterministic replay (M3.7), account updates, risk, WAL, APIs
+- Risk/accounts integration, WAL, trading APIs (P4+)
 
 ### Progress & requirements
 

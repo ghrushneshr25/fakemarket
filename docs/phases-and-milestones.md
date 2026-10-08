@@ -695,16 +695,15 @@ Full margin model, real settlement, brokerage compliance
 | P0 Foundation | ✅ | — |
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
-| P3 Matching | 🔧 | **M3.7 Deterministic Replay** |
+| P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ⏳ | After P3 close |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
-Done:   Instrument → Order → Lifecycle → Trade model
-        → Book → Match → Fills → Trade gen → Market → Cancel → IOC/FOK
-Next:   M3.7 Replay → P4 Risk → P5 WAL → P6 API
+Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
+Next:   P4 Risk → P5 WAL → P6 API
 ```
 
 ---
