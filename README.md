@@ -12,7 +12,7 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 3  — Matching Engine
-  M3.1–M3.4 Matching · Partial fills · Trades · Market orders  (complete)
+  M3.1–M3.5 Matching · Fills · Trades · Market · Cancellation  (complete)
 
 Phase 2  — Order Book  (complete)
 Phase 1  — Financial Domain  (complete)
@@ -21,12 +21,12 @@ Phase 0  — Engineering Foundation  (complete)
 
 What exists today:
 
-- LIMIT + **MARKET** matching (market never rests; unfilled → EXPIRED)
-- Match → Trade + 2 Executions
+- LIMIT + MARKET matching, Trade generation
+- **Cancel** resting/partial orders (book + index + CANCELLED)
 
 What does **not** exist yet (by design):
 
-- Cancel API, IOC/FOK, account updates on trade
+- IOC/FOK, account updates on trade
 - Risk / BP / WAL / APIs
 
 ---

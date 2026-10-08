@@ -115,6 +115,16 @@ func (l *PriceLevel) RemoveFront() (*domain.Order, error) {
 	return node.order, nil
 }
 
+// Get returns the order pointer for id without removing it. O(n).
+func (l *PriceLevel) Get(id domain.OrderID) (*domain.Order, bool) {
+	for n := l.head; n != nil; n = n.next {
+		if n.order.ID == id {
+			return n.order, true
+		}
+	}
+	return nil, false
+}
+
 // Remove removes a specific order by ID. O(n) scan in M2.1.
 func (l *PriceLevel) Remove(id domain.OrderID) (*domain.Order, error) {
 	for n := l.head; n != nil; n = n.next {

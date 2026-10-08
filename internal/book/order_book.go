@@ -73,6 +73,32 @@ func (ob *OrderBook) Get(orderID domain.OrderID) (OrderLocation, error) {
 	return ob.index.Get(orderID)
 }
 
+// GetOrder returns the live *Order for a resting orderID via index + level lookup.
+func (ob *OrderBook) GetOrder(orderID domain.OrderID) (*domain.Order, error) {
+	loc, err := ob.index.Get(orderID)
+	if err != nil {
+		return nil, err
+	}
+	var level *PriceLevel
+	var ok bool
+	switch loc.Side {
+	case domain.SideBuy:
+		level, ok = ob.bids.GetLevel(loc.Price)
+	case domain.SideSell:
+		level, ok = ob.asks.GetLevel(loc.Price)
+	default:
+		return nil, fmt.Errorf("%w: bad location side", ErrBookInvariant)
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: indexed price missing physically", ErrBookInvariant)
+	}
+	order, found := level.Get(orderID)
+	if !found {
+		return nil, fmt.Errorf("%w: indexed order missing physically", ErrBookInvariant)
+	}
+	return order, nil
+}
+
 // Contains reports whether orderID is resting on this book.
 func (ob *OrderBook) Contains(orderID domain.OrderID) bool {
 	return ob.index.Contains(orderID)

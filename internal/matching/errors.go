@@ -9,4 +9,7 @@ var (
 
 	ErrInvalidTradeGen       = errors.New("invalid trade generation")
 	ErrTradeExecInconsistent = errors.New("trade/execution inconsistent")
+
+	ErrOrderNotFound       = errors.New("order not found")
+	ErrOrderNotCancellable = errors.New("order not cancellable")
 )

@@ -4,5 +4,6 @@
 // M3.2: partial-fill quantity/lifecycle invariants (FIFO preserved).
 // M3.3: Fill → Trade + two Executions (no account/WAL side effects).
 // M3.4: MARKET orders (no price, never rest, unfilled → EXPIRED).
-// Cancel APIs and IOC/FOK come later.
+// M3.5: Cancel resting/partial orders (book removal + CANCELLED).
+// IOC/FOK come later.
 package matching
