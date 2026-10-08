@@ -546,23 +546,48 @@ Disk WAL, snapshots, crash recovery from durable storage
 
 # P4 — Accounts & Risk
 
-### Phase requirements (PRD)
+### Phase goal
 
-| # | Requirement |
-|---|-------------|
-| P4.1 | Risk checks **before** matching |
-| P4.2 | Buying power: required cash ≤ available |
-| P4.3 | Position / order size / price band limits |
-| P4.4 | Instrument status (ACTIVE vs HALTED/CLOSED) |
-| P4.5 | Reservations so concurrent orders can’t double-spend BP |
-| P4.6 | Risk rejects → order REJECTED; no book entry |
-| P4.7 | Market-order unknown notional strategy (deferred from M3.4) |
+Financial constraints on order acceptance: balances → positions → buying power → limits → reservations.
 
-### Phase status: ⏳
+### Phase status: 🔧 In progress (P4.1 ✅)
 
-### Explicitly not yet
+### Roadmap
 
-Full margin model, real settlement, brokerage compliance
+```text
+P4.1 Balance          ✅
+P4.2 Position         ⏳  (refine M1.5 for risk path)
+P4.3 Buying Power     ⏳
+P4.4 Position Limits  ⏳
+P4.5 Order Limits     ⏳
+P4.6 Price Bands      ⏳
+P4.7 Reservation Model ⏳
+```
+
+---
+
+## P4.1 — Balance
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Authoritative non-negative cash balance with checked arithmetic |
+| **Code** | `internal/domain/balance.go`, Account uses Balance |
+| **ADR** | [0022](./adr/0022-balance-model.md) |
+
+### Requirements
+
+1. Balance = Currency + Money amount (int64 minor units)  
+2. Amount ≥ 0; zero balance valid  
+3. Credit/Debit require amount > 0 (reject 0 and negative)  
+4. Currency must match on every mutation  
+5. Overflow rejected; insufficient funds rejected  
+6. Failed ops leave balance unchanged  
+7. No floats; no BP/reserved split; no trade auto-settlement; no mutex  
+
+### Out of scope
+
+Buying power, reservations, fees, settlement, multi-currency FX, concurrency
 
 ---
 
@@ -696,14 +721,14 @@ Full margin model, real settlement, brokerage compliance
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | ⏳ | After P3 close |
+| P4 Risk | 🔧 | P4.1 ✅; next P4.2 Position |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P4 Risk → P5 WAL → P6 API
+Next:   P4.2 Position → BP → Limits → Reservations → P5 WAL
 ```
 
 ---
@@ -715,4 +740,4 @@ Next:   P4 Risk → P5 WAL → P6 API
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P3 complete through M3.7 Deterministic Replay.
+**Last updated:** 2026-09-30 — P4.1 Balance complete.

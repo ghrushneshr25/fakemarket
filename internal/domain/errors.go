@@ -56,11 +56,16 @@ var (
 	ErrTradeExecutionMismatch = errors.New("trade/execution mismatch")
 	ErrInvalidTimestamp       = errors.New("invalid timestamp")
 
-	// Account & Position (M1.5)
+	// Account & Position (M1.5) / Balance (P4.1)
 	ErrInvalidAccount       = errors.New("invalid account")
 	ErrInvalidPosition      = errors.New("invalid position")
+	ErrInvalidBalance       = errors.New("invalid balance")
 	ErrInsufficientCash     = errors.New("insufficient cash")
+	ErrInsufficientFunds    = errors.New("insufficient funds") // alias semantic for balance debit
 	ErrInsufficientPosition = errors.New("insufficient position")
 	ErrArithmeticOverflow   = errors.New("arithmetic overflow")
+	ErrBalanceOverflow      = errors.New("balance overflow")
 	ErrInvalidMoneyAmount   = errors.New("invalid money amount")
+	ErrInvalidAmount        = errors.New("invalid amount")
+	ErrCurrencyMismatch     = errors.New("currency mismatch")
 )

@@ -1,16 +1,20 @@
 package domain
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Account holds cash and per-instrument positions for one participant.
 //
-// M1.5: cash + holdings only. No buying power, reservations, risk, or P&L.
+// Cash is a Balance (currency + amount). P4.1 refines balance mutations;
+// no buying power, reservations, risk, or P&L.
 // Mutation is via domain methods; no embedded mutex (single-writer later).
 type Account struct {
 	ID       AccountID
 	Currency Currency
 
-	cash      Money
+	balance   Balance
 	positions map[InstrumentID]Position
 }
 
@@ -23,10 +27,14 @@ type AccountParams struct {
 
 // NewAccount constructs a valid account with no positions.
 func NewAccount(p AccountParams) (Account, error) {
+	bal, err := NewBalance(p.Currency, p.Cash)
+	if err != nil {
+		return Account{}, fmt.Errorf("%w: %w", ErrInvalidAccount, err)
+	}
 	a := Account{
 		ID:        p.ID,
 		Currency:  p.Currency,
-		cash:      p.Cash,
+		balance:   bal,
 		positions: make(map[InstrumentID]Position),
 	}
 	if err := a.Validate(); err != nil {
@@ -35,8 +43,11 @@ func NewAccount(p AccountParams) (Account, error) {
 	return a, nil
 }
 
-// Cash returns the current cash balance (minor units).
-func (a Account) Cash() Money { return a.cash }
+// Cash returns the current cash amount (minor units).
+func (a Account) Cash() Money { return a.balance.Amount() }
+
+// Balance returns a copy of the cash balance.
+func (a Account) Balance() Balance { return a.balance }
 
 // Validate checks account structural invariants.
 func (a Account) Validate() error {
@@ -46,8 +57,11 @@ func (a Account) Validate() error {
 	if err := a.Currency.Validate(); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidAccount, err)
 	}
-	if a.cash < 0 {
-		return fmt.Errorf("%w: cash cannot be negative", ErrInvalidAccount)
+	if err := a.balance.Validate(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidAccount, err)
+	}
+	if a.balance.Currency() != a.Currency {
+		return fmt.Errorf("%w: account currency %s != balance %s", ErrInvalidAccount, a.Currency, a.balance.Currency())
 	}
 	if a.positions == nil {
 		return fmt.Errorf("%w: positions map nil", ErrInvalidAccount)
@@ -63,36 +77,25 @@ func (a Account) Validate() error {
 	return nil
 }
 
-// Credit increases cash. amount must be > 0. On failure, cash is unchanged.
+// Credit increases cash in the account currency. amount must be > 0.
 func (a *Account) Credit(amount Money) error {
-	if amount <= 0 {
-		return fmt.Errorf("%w: credit must be > 0", ErrInvalidMoneyAmount)
+	err := a.balance.Credit(a.Currency, amount)
+	if errors.Is(err, ErrInvalidAmount) {
+		return fmt.Errorf("%w: %w", ErrInvalidMoneyAmount, err)
 	}
-	sum, err := CheckedAddMoney(a.cash, amount)
-	if err != nil {
-		return err
-	}
-	a.cash = sum
-	return nil
+	return err
 }
 
-// Debit decreases cash. amount must be > 0 and <= balance. On failure, unchanged.
+// Debit decreases cash in the account currency. amount must be > 0 and <= balance.
 func (a *Account) Debit(amount Money) error {
-	if amount <= 0 {
-		return fmt.Errorf("%w: debit must be > 0", ErrInvalidMoneyAmount)
+	err := a.balance.Debit(a.Currency, amount)
+	if errors.Is(err, ErrInvalidAmount) {
+		return fmt.Errorf("%w: %w", ErrInvalidMoneyAmount, err)
 	}
-	if amount > a.cash {
-		return fmt.Errorf("%w: need %d have %d", ErrInsufficientCash, amount, a.cash)
+	if errors.Is(err, ErrInsufficientFunds) {
+		return fmt.Errorf("%w: %w", ErrInsufficientCash, err)
 	}
-	diff, err := CheckedSubMoney(a.cash, amount)
-	if err != nil {
-		return err
-	}
-	if diff < 0 {
-		return fmt.Errorf("%w: result negative", ErrInsufficientCash)
-	}
-	a.cash = diff
-	return nil
+	return err
 }
 
 // GetPosition returns a copy of the position for instrumentID.

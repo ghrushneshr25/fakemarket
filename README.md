@@ -11,18 +11,23 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 3  — Matching Engine  (complete)  M3.1–M3.7
+Phase 4  — Accounts & Risk
+  P4.1 Balance  (complete)
+
+Phase 3  — Matching Engine  (complete)
 Phase 2–0  (complete)
 ```
 
 What exists today:
 
-- Full matching: LIMIT/MARKET, IOC/FOK, cancel, Trade+Executions
-- **Deterministic replay** of SUBMIT/CANCEL command streams
+- Full matching + deterministic replay (P3)
+- **Balance**: currency-scoped cash with checked credit/debit
 
 What does **not** exist yet (by design):
 
-- Risk/accounts integration, WAL, trading APIs (P4+)
+- Buying power, reservations, risk limits (later P4)
+- WAL, trading APIs (P5+)
+
 
 ### Progress & requirements
 
