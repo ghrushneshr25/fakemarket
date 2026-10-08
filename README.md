@@ -27,9 +27,13 @@ What does **not** exist yet (by design):
 
 - Deterministic replay (M3.7), account updates, risk, WAL, APIs
 
-### Progress tracker
+### Progress & requirements
 
-See **[docs/phases-and-milestones.md](docs/phases-and-milestones.md)** for full phase/milestone status and ADR links.
+See **[docs/phases-and-milestones.md](docs/phases-and-milestones.md)** for:
+
+- phase goals and requirements  
+- each milestone’s in-scope / out-of-scope requirements  
+- acceptance status and ADR links  
 
 ---
 
