@@ -18,6 +18,7 @@ type Order struct {
 	InstrumentID InstrumentID
 	Side         Side
 	Type         OrderType
+	TimeInForce  TimeInForce
 
 	// price is non-nil only for LIMIT orders.
 	price *Price
@@ -46,6 +47,8 @@ type OrderParams struct {
 	InstrumentID InstrumentID
 	Side         Side
 	Type         OrderType
+	// TimeInForce defaults to GTC when empty.
+	TimeInForce TimeInForce
 	// Price is required for LIMIT and must be nil for MARKET.
 	Price    *Price
 	Quantity Quantity
@@ -56,13 +59,19 @@ type OrderParams struct {
 //
 //	RemainingQuantity = Quantity
 //	Status            = RECEIVED
+//	TimeInForce       = GTC if unset
 func NewOrder(p OrderParams) (Order, error) {
+	tif := p.TimeInForce
+	if tif == "" {
+		tif = TIFGTC
+	}
 	o := Order{
 		ID:           p.ID,
 		AccountID:    p.AccountID,
 		InstrumentID: p.InstrumentID,
 		Side:         p.Side,
 		Type:         p.Type,
+		TimeInForce:  tif,
 		Quantity:     p.Quantity,
 		remaining:    p.Quantity,
 		status:       OrderStatusReceived,
@@ -116,6 +125,13 @@ func (o Order) Validate() error {
 	}
 	if err := o.Type.Validate(); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidOrder, err)
+	}
+	if err := o.TimeInForce.Validate(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidOrder, err)
+	}
+	// M3.6: MARKET + IOC/FOK not defined yet.
+	if o.Type == OrderTypeMarket && (o.TimeInForce == TIFIOC || o.TimeInForce == TIFFOK) {
+		return fmt.Errorf("%w: MARKET + %s unsupported", ErrInvalidOrder, o.TimeInForce)
 	}
 	if o.Quantity <= 0 {
 		return fmt.Errorf("%w: %w: quantity must be > 0", ErrInvalidOrder, ErrInvalidQuantity)

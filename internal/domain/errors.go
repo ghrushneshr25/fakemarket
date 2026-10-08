@@ -27,6 +27,7 @@ var (
 	ErrInvalidSide          = errors.New("invalid side")
 	ErrInvalidOrderType     = errors.New("invalid order type")
 	ErrInvalidOrderStatus   = errors.New("invalid order status")
+	ErrInvalidTimeInForce   = errors.New("invalid time in force")
 	ErrInvalidQuantity      = errors.New("invalid quantity")
 	ErrInvalidRemainingQty  = errors.New("invalid remaining quantity")
 	ErrMissingPrice         = errors.New("missing price")

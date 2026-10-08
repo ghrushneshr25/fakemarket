@@ -12,22 +12,24 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 3  — Matching Engine
-  M3.1–M3.5 Matching · Fills · Trades · Market · Cancellation  (complete)
+  M3.1–M3.6 … + IOC/FOK  (complete)
+  M3.7 Deterministic Replay  ⏳
 
-Phase 2  — Order Book  (complete)
-Phase 1  — Financial Domain  (complete)
-Phase 0  — Engineering Foundation  (complete)
+Phase 2–0  (complete)
 ```
 
 What exists today:
 
-- LIMIT + MARKET matching, Trade generation
-- **Cancel** resting/partial orders (book + index + CANCELLED)
+- LIMIT/MARKET match, trades, cancel
+- **TimeInForce**: GTC, IOC, FOK (FOK preflight, zero mutation on fail)
 
 What does **not** exist yet (by design):
 
-- IOC/FOK, account updates on trade
-- Risk / BP / WAL / APIs
+- Deterministic replay (M3.7), account updates, risk, WAL, APIs
+
+### Progress tracker
+
+See **[docs/phases-and-milestones.md](docs/phases-and-milestones.md)** for full phase/milestone status and ADR links.
 
 ---
 

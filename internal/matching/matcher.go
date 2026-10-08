@@ -50,13 +50,14 @@ func (r Result) ConservesIncoming(originalQty domain.Quantity) bool {
 
 // Match runs price-time priority matching of incoming against book.
 //
-// Supports LIMIT and MARKET.
+// Supports LIMIT (+ GTC/IOC/FOK) and MARKET (GTC-like immediate; never rests).
 //
-// LIMIT: crosses only when price condition holds; remainder not rested here.
-// MARKET: no price; consumes best opposing liquidity until filled or exhausted;
-// unfilled remainder is EXPIRED (never RESTING / never on book).
+//	LIMIT+GTC: match; remainder left for rest orchestration
+//	LIMIT+IOC: match; remainder Cancel()'d (never rests)
+//	LIMIT+FOK: preflight full qty; all-or-nothing; never rests; fail → Cancel, 0 fills
+//	MARKET:    consume liquidity; unfilled → EXPIRED
 //
-// Self-trade: best opposing same AccountID → ErrSelfTrade (no skip deeper).
+// Self-trade: ErrSelfTrade, no skip deeper. FOK failure: zero book mutation.
 func Match(incoming *domain.Order, ob *book.OrderBook) (Result, error) {
 	if incoming == nil || ob == nil {
 		return Result{}, fmt.Errorf("%w: nil incoming or book", ErrInvalidMatchInput)
@@ -68,55 +69,119 @@ func Match(incoming *domain.Order, ob *book.OrderBook) (Result, error) {
 		return Result{}, fmt.Errorf("%w: nothing to match", ErrInvalidMatchInput)
 	}
 
-	var fills []Fill
-	var err error
-
 	switch incoming.Type {
 	case domain.OrderTypeLimit:
 		if !incoming.HasPrice() {
 			return Result{}, fmt.Errorf("%w: limit order missing price", ErrInvalidMatchInput)
 		}
-		switch incoming.Side {
-		case domain.SideBuy:
-			fills, err = matchLimitBuy(incoming, ob)
-		case domain.SideSell:
-			fills, err = matchLimitSell(incoming, ob)
+		switch incoming.TimeInForce {
+		case domain.TIFGTC, "":
+			fills, err := matchLimit(incoming, ob)
+			return finishMatch(incoming, fills, err)
+		case domain.TIFIOC:
+			return matchIOC(incoming, ob)
+		case domain.TIFFOK:
+			return matchFOK(incoming, ob)
 		default:
-			return Result{}, fmt.Errorf("%w: side %s", ErrInvalidMatchInput, incoming.Side)
+			return Result{}, fmt.Errorf("%w: TIF %s", ErrUnsupportedOrder, incoming.TimeInForce)
 		}
 	case domain.OrderTypeMarket:
 		if incoming.HasPrice() {
 			return Result{}, fmt.Errorf("%w: market order must not have price", ErrInvalidMatchInput)
 		}
-		switch incoming.Side {
-		case domain.SideBuy:
-			fills, err = matchMarketBuy(incoming, ob)
-		case domain.SideSell:
-			fills, err = matchMarketSell(incoming, ob)
-		default:
-			return Result{}, fmt.Errorf("%w: side %s", ErrInvalidMatchInput, incoming.Side)
+		if incoming.TimeInForce == domain.TIFIOC || incoming.TimeInForce == domain.TIFFOK {
+			return Result{}, fmt.Errorf("%w: MARKET + %s", ErrUnsupportedOrder, incoming.TimeInForce)
 		}
+		mktFills, mktErr := matchMarket(incoming, ob)
+		res, err := finishMatch(incoming, mktFills, mktErr)
+		if err != nil {
+			return res, err
+		}
+		if incoming.RemainingQuantity() > 0 {
+			if expErr := incoming.Expire("insufficient liquidity"); expErr != nil {
+				return Result{Fills: res.Fills, IncomingRemaining: incoming.RemainingQuantity()}, expErr
+			}
+			res.IncomingRemaining = incoming.RemainingQuantity()
+			res.IncomingFullyFilled = false
+		}
+		return res, nil
 	default:
 		return Result{}, fmt.Errorf("%w: type %s", ErrUnsupportedOrder, incoming.Type)
 	}
+}
 
+func finishMatch(incoming *domain.Order, fills []Fill, err error) (Result, error) {
 	if err != nil {
-		return Result{
-			Fills:             fills,
-			IncomingRemaining: incoming.RemainingQuantity(),
-		}, err
+		return Result{Fills: fills, IncomingRemaining: incoming.RemainingQuantity()}, err
 	}
+	return Result{
+		Fills:               fills,
+		IncomingRemaining:   incoming.RemainingQuantity(),
+		IncomingFullyFilled: incoming.RemainingQuantity() == 0,
+	}, nil
+}
 
-	// MARKET unfilled remainder cannot rest — expire terminal outcome.
-	if incoming.Type == domain.OrderTypeMarket && incoming.RemainingQuantity() > 0 {
-		if err := incoming.Expire("insufficient liquidity"); err != nil {
-			return Result{
-				Fills:             fills,
-				IncomingRemaining: incoming.RemainingQuantity(),
-			}, err
+func matchLimit(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
+	switch incoming.Side {
+	case domain.SideBuy:
+		return matchLimitBuy(incoming, ob)
+	case domain.SideSell:
+		return matchLimitSell(incoming, ob)
+	default:
+		return nil, fmt.Errorf("%w: side %s", ErrInvalidMatchInput, incoming.Side)
+	}
+}
+
+func matchMarket(incoming *domain.Order, ob *book.OrderBook) ([]Fill, error) {
+	switch incoming.Side {
+	case domain.SideBuy:
+		return matchMarketBuy(incoming, ob)
+	case domain.SideSell:
+		return matchMarketSell(incoming, ob)
+	default:
+		return nil, fmt.Errorf("%w: side %s", ErrInvalidMatchInput, incoming.Side)
+	}
+}
+
+func matchIOC(incoming *domain.Order, ob *book.OrderBook) (Result, error) {
+	fills, err := matchLimit(incoming, ob)
+	if err != nil {
+		return Result{Fills: fills, IncomingRemaining: incoming.RemainingQuantity()}, err
+	}
+	// Cancel unfilled remainder (order was never resting on book).
+	if incoming.RemainingQuantity() > 0 {
+		if err := incoming.Cancel("IOC remainder"); err != nil {
+			return Result{Fills: fills, IncomingRemaining: incoming.RemainingQuantity()}, err
 		}
 	}
+	return Result{
+		Fills:               fills,
+		IncomingRemaining:   incoming.RemainingQuantity(),
+		IncomingFullyFilled: incoming.RemainingQuantity() == 0 && incoming.Status() == domain.OrderStatusFilled,
+	}, nil
+}
 
+func matchFOK(incoming *domain.Order, ob *book.OrderBook) (Result, error) {
+	need := incoming.RemainingQuantity()
+	candidates, err := collectEligible(incoming, ob)
+	if err != nil {
+		// Self-trade or other: no mutation yet.
+		return Result{IncomingRemaining: need}, err
+	}
+	if candidatesTotal(candidates) < need {
+		// Zero mutation failure → CANCELLED (accepted but could not fully execute).
+		if err := incoming.Cancel("FOK insufficient liquidity"); err != nil {
+			return Result{IncomingRemaining: need}, err
+		}
+		return Result{
+			Fills:             nil,
+			IncomingRemaining: incoming.RemainingQuantity(),
+		}, nil
+	}
+	fills, err := executeCandidates(incoming, ob, candidates)
+	if err != nil {
+		return Result{Fills: fills, IncomingRemaining: incoming.RemainingQuantity()}, err
+	}
 	return Result{
 		Fills:               fills,
 		IncomingRemaining:   incoming.RemainingQuantity(),
