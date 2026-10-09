@@ -769,7 +769,7 @@ P5.7 Crash Recovery  ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Append-only durable event records (fsync contract) |
 | **Code** | `internal/wal/` |
 | **ADR** | [0030](./adr/0030-wal-writer.md) |
@@ -898,7 +898,7 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.2 ✅; next P5.3 WAL Reader |
+| P5 WAL | 🔧 | P5.1–P5.2 CLOSED; next P5.3 WAL Reader |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
@@ -916,4 +916,4 @@ Next:   P5.3 WAL Reader → Recovery → Replay → Snapshots
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.2 WAL Writer complete.
+**Last updated:** 2026-09-30 — P5.2 CLOSED (CTO accepted). Next: P5.3 WAL Reader.
