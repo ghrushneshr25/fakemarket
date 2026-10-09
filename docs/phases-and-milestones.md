@@ -788,10 +788,11 @@ P5.7 Crash Recovery  ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Stream-validate WAL bytes → authoritative events (no state apply) |
 | **Code** | `internal/wal/reader.go`, `segment.go` |
 | **ADR** | [0031](./adr/0031-wal-reader.md) |
+| **Commits** | `cab58eb` feature · `fd86f5f` Q55/Q64 evidence |
 
 ### Requirements
 
@@ -916,7 +917,7 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.3 ✅; next P5.4 WAL Recovery |
+| P5 WAL | 🔧 | P5.1–P5.3 CLOSED; next P5.4 WAL Recovery |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
@@ -934,4 +935,4 @@ Next:   P5.4 WAL Recovery → Replay → Snapshots
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.3 WAL Reader complete.
+**Last updated:** 2026-09-30 — P5.3 CLOSED (CTO accepted). Next: P5.4 WAL Recovery.

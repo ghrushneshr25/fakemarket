@@ -55,6 +55,10 @@ P5.3 does **not** truncate files. Tail policy is P5.4+.
 
 `Event.Sequence` only; does not reset per segment. First event must be 1.
 
+`Reader.LastSequence()` returns the last **successfully returned** `Event.Sequence`
+value (0 if none). It is not a count of events. Example: after events with
+sequences 100 and 101, `LastSequence() == 101`.
+
 ## Non-goals
 
 Repair, recovery apply, snapshots, reordering by timestamp.
