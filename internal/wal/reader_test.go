@@ -394,3 +394,65 @@ func TestReader_Close(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Q64: 100 valid, 101 valid, 102 partial → Next 100, Next 101, Next ErrTruncatedRecord
+func TestReader_CrashTail_TruncatedFinal(t *testing.T) {
+	dir := t.TempDir()
+	r100 := mustRecord(t, 1)
+	r101 := mustRecord(t, 2)
+	r102 := mustRecord(t, 3)
+	// partial final: cut mid-body
+	partial := r102[:RecordHeaderSize+10]
+	buf := append(encodeSegmentHeader(), r100...)
+	buf = append(buf, r101...)
+	buf = append(buf, partial...)
+	_ = os.WriteFile(filepath.Join(dir, "segment-00000001.wal"), buf, 0o600)
+
+	r, err := OpenReader(ReaderConfig{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+
+	e1, err := r.Next()
+	if err != nil || e1.Sequence() != 1 {
+		t.Fatal(err, e1.Sequence())
+	}
+	e2, err := r.Next()
+	if err != nil || e2.Sequence() != 2 {
+		t.Fatal(err, e2.Sequence())
+	}
+	_, err = r.Next()
+	if !errors.Is(err, ErrTruncatedRecord) {
+		t.Fatalf("want truncated, got %v", err)
+	}
+	// Must never return a fabricated sequence-3 event after truncation.
+	if r.LastSequence() != 2 {
+		t.Fatalf("last seq want 2 got %d", r.LastSequence())
+	}
+}
+
+// Q55: complete record length but bad CRC → ErrChecksumMismatch (not truncation)
+func TestReader_CompleteButBadCRC_NotTruncation(t *testing.T) {
+	dir := t.TempDir()
+	r1 := mustRecord(t, 1)
+	r2 := mustRecord(t, 2)
+	r3 := mustRecord(t, 3)
+	r3[RecordHeaderSize+1] ^= 0xff // corrupt payload, full length kept
+	buf := append(encodeSegmentHeader(), r1...)
+	buf = append(buf, r2...)
+	buf = append(buf, r3...)
+	_ = os.WriteFile(filepath.Join(dir, "segment-00000001.wal"), buf, 0o600)
+
+	r, _ := OpenReader(ReaderConfig{Dir: dir})
+	t.Cleanup(func() { _ = r.Close() })
+	_, _ = r.Next()
+	_, _ = r.Next()
+	_, err := r.Next()
+	if !errors.Is(err, ErrChecksumMismatch) {
+		t.Fatalf("want checksum mismatch, got %v", err)
+	}
+	if errors.Is(err, ErrTruncatedRecord) {
+		t.Fatal("must not classify bad CRC as truncation")
+	}
+}
