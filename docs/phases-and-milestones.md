@@ -749,7 +749,7 @@ P5.7 Crash Recovery  ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Immutable authoritative event contract (pre-WAL) |
 | **Code** | `internal/event/` |
 | **ADR** | [0029](./adr/0029-event-model.md) |
@@ -879,7 +879,7 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1 ✅; next P5.2 WAL Writer |
+| P5 WAL | 🔧 | P5.1 CLOSED; next P5.2 WAL Writer |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
@@ -897,4 +897,4 @@ Next:   P5.2 WAL Writer → Reader → Recovery → Snapshots
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.1 Event Model complete.
+**Last updated:** 2026-09-30 — P5.1 CLOSED (CTO accepted). Next: P5.2 WAL Writer.
