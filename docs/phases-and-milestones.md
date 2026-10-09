@@ -846,14 +846,14 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | ✅ | P4.1–P4.7 complete |
-| P5 WAL | ⏳ | After risk or parallel carefully |
+| P4 Risk | ✅ | CLOSED — next P5.1 Event Model |
+| P5 WAL | ⏳ | Next: P5.1 Event Model |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5 WAL
+Next:   P5.1 Event Model → WAL → Snapshots → Recovery
 ```
 
 ---
@@ -865,4 +865,4 @@ Next:   P5 WAL
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4.7 Reservation Model complete; P4 closed.
+**Last updated:** 2026-09-30 — P4 CLOSED (CTO accepted). Next: P5.1 Event Model.
