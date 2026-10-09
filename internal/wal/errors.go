@@ -21,4 +21,12 @@ var (
 	ErrInvalidMagic          = errors.New("invalid wal magic")
 	ErrUnsupportedVersion    = errors.New("unsupported wal version")
 	ErrInvalidConfig         = errors.New("invalid wal config")
+
+	// Reader (P5.3)
+	ErrChecksumMismatch   = errors.New("wal checksum mismatch")
+	ErrTruncatedRecord    = errors.New("wal truncated record")
+	ErrMissingSegment     = errors.New("wal missing segment")
+	ErrInvalidSegmentName = errors.New("invalid wal segment name")
+	ErrReaderClosed       = errors.New("wal reader closed")
+	ErrCorruptWAL         = errors.New("wal corrupt")
 )

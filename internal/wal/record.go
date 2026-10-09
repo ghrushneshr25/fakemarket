@@ -101,6 +101,10 @@ func buildEventRecord(sequence uint64, tsNano uint64, payload []byte) ([]byte, e
 	return buf, nil
 }
 
+func checksumHeaderPayload(b []byte) uint32 {
+	return crc32.Checksum(b, crcTable)
+}
+
 // verifyEventRecordChecksum validates CRC over header+payload (excluding checksum).
 // Returns payload length from header if framing is intact enough to read length.
 func verifyEventRecordChecksum(rec []byte) error {
@@ -127,7 +131,7 @@ func verifyEventRecordChecksum(rec []byte) error {
 		return fmt.Errorf("%w: unexpected trailing bytes", ErrInvalidRecord)
 	}
 	got := binary.BigEndian.Uint32(rec[RecordHeaderSize+int(plen):])
-	want := crc32.Checksum(rec[:RecordHeaderSize+int(plen)], crcTable)
+	want := checksumHeaderPayload(rec[:RecordHeaderSize+int(plen)])
 	if got != want {
 		return fmt.Errorf("%w: checksum mismatch", ErrInvalidRecord)
 	}

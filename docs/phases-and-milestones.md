@@ -736,7 +736,7 @@ Shorts, realized/unrealized P&L, settlement, BP
 ```text
 P5.1 Event Model     ✅
 P5.2 WAL Writer      ✅
-P5.3 WAL Reader      ⏳
+P5.3 WAL Reader      ✅
 P5.4 WAL Recovery    ⏳
 P5.5 Event Replay    ⏳
 P5.6 Snapshots       ⏳
@@ -781,6 +781,24 @@ P5.7 Crash Recovery  ⏳
 3. Append = write + flush + fsync; sync fail → not committed + faulted  
 4. Segments `segment-%08d.wal`; no split records  
 5. No reader/recovery  
+
+---
+
+## P5.3 — WAL Reader
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Stream-validate WAL bytes → authoritative events (no state apply) |
+| **Code** | `internal/wal/reader.go`, `segment.go` |
+| **ADR** | [0031](./adr/0031-wal-reader.md) |
+
+### Requirements
+
+1. Discover `segment-%08d.wal` in order; missing gap fails  
+2. Frame/CRC/schema/state-authoritative/sequence/EventID checks  
+3. Truncation ≠ clean EOF; no skip/repair  
+4. Streaming `Next()`; no state mutation  
 
 ---
 
@@ -898,13 +916,13 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.2 CLOSED; next P5.3 WAL Reader |
+| P5 WAL | 🔧 | P5.1–P5.3 ✅; next P5.4 WAL Recovery |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5.3 WAL Reader → Recovery → Replay → Snapshots
+Next:   P5.4 WAL Recovery → Replay → Snapshots
 ```
 
 ---
@@ -916,4 +934,4 @@ Next:   P5.3 WAL Reader → Recovery → Replay → Snapshots
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.2 CLOSED (CTO accepted). Next: P5.3 WAL Reader.
+**Last updated:** 2026-09-30 — P5.3 WAL Reader complete.
