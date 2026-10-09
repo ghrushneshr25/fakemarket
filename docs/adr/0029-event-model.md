@@ -19,99 +19,131 @@ P4 defined financial state and risk. Recovery needs an **authoritative history o
 | **Event** | Durable fact (“OrderCancelled happened”) |
 | **State** | Derived projection (remaining qty, cash, book) |
 
-Rejected commands that never produce a fact emit **no** authoritative event and consume **no** event sequence.
+A failed command does **not** become a successful state event.
 
 ### 2. Envelope + payload
 
-Immutable `Event` envelope (identity, type, version, class, global sequence, UTC timestamp, correlation/causation, aggregate, optional entity refs) + typed JSON payload bytes.
+Immutable `Event` envelope (identity, type, version, class, sequence, UTC timestamp, correlation/causation, aggregate, optional entity refs) + typed JSON payload bytes.
 
 ### 3. Event identity
 
-`EventID` ≠ `OrderID` ≠ `TradeID` ≠ `Sequence`. One trade fact may appear once as `TradeExecuted` with its own `EventID` and domain `TradeID`.
+`EventID` ≠ `OrderID` ≠ `TradeID` ≠ `Event.Sequence` ≠ `Trade.Sequence`.
 
-### 4. Sequence (resolves M0.2 deferral)
+### 4. Two sequence namespaces (do not conflate)
+
+| Field | Meaning |
+|-------|---------|
+| **`Event.Sequence`** | Position of this event in the **global authoritative event stream** (WAL total order) |
+| **`Trade.Sequence` / `TradeSequence` in payload** | Domain/matching sequence of the **trade object** (trade fact ordering within matching) |
+| **`Order.Sequence` / `OrderSequence` in payload** | Domain book time-priority sequence on the **order** |
+
+They are **different concepts**. They may numerically coincide in some flows; **never assume equality**.
+
+```text
+Event.Sequence     → recovery / WAL order
+Trade.Sequence     → domain trade identity ordering
+Order.Sequence     → book FIFO / time priority
+```
+
+### 5. Global Event.Sequence (resolves M0.2)
 
 **Global authoritative event sequence** for the single-writer exchange:
 
-- Starts at **1** (0 = unassigned)
-- Every **authoritative** event consumes exactly one sequence number
-- **Derived** events do **not** use this sequence namespace
-- Rejected commands with no event → no sequence consumption
-- **Gaps** on replay → `ErrSequenceGap` (missing/corrupt)
+- Starts at **1** (0 = unassigned / not on authoritative stream)
+- Every **state-authoritative** event consumes exactly one `Event.Sequence`
+- **Derived/audit** events do **not** consume this namespace (sequence may be 0)
+- **Gaps** on replay of the authoritative stream → `ErrSequenceGap`
 - **Regression** → `ErrSequenceOutOfOrder`
-- Ordering is **sequence only**; timestamp is audit metadata
-- Sequence is part of the envelope and will be **persisted in WAL** (P5.2+)
+- Ordering is **Event.Sequence only**; timestamp is audit metadata
+- Persisted on the envelope in WAL (P5.2+)
 
-Rationale: FakeMarket is single-writer first; global total order matches deterministic recovery. Per-instrument sequences can be added later for sharding without removing global order.
+### 6. Timestamp
 
-### 5. Timestamp
+UTC, from authoritative clock/context (M3.7 discipline). Not ordering. Equal timestamps allowed; `Event.Sequence` breaks ties.
 
-UTC, from authoritative clock/context (same discipline as M3.7). Not ordering. Equal timestamps allowed; sequence breaks ties.
+### 7. Correlation / causation
 
-### 6. Correlation / causation
-
-- **CorrelationID**: groups one logical operation (e.g. command id)
+- **CorrelationID**: logical operation group (e.g. command id)
 - **CausationID**: parent `EventID`, or empty for root (command-origin)
 
-### 7. Aggregate
+### 8. Aggregate
 
-Primary entity: `ORDER` | `TRADE` | `RESERVATION` | `ACCOUNT`. Multi-entity trades put both sides in payload; envelope aggregate is `TRADE`.
+Primary entity: `ORDER` | `TRADE` | `RESERVATION` | `ACCOUNT`.  
+Multi-entity trades: both sides in payload; envelope aggregate = `TRADE`.
 
-### 8. Authoritative event types (v1)
+### 9. State-authoritative vs audit — **definitive**
+
+#### State-authoritative (required for recovery fold; `ClassAuthoritative`; consume `Event.Sequence`)
 
 ```text
-OrderAccepted, OrderRejected, OrderCancelled, OrderExpired
+OrderAccepted
+OrderCancelled
+OrderExpired
 TradeExecuted
-ReservationCreated, ReservationReleased, ReservationPartiallyReleased
+ReservationCreated
+ReservationPartiallyReleased
+ReservationReleased
 ```
 
-**TradeExecuted** is one event for both sides (not separate authoritative Execution events). Executions remain domain objects; they can be derived from the trade fact.
+These reconstruct: orders in system, cancels/expires, trades, reservation capacity.
 
-**Reservation*** = capacity commitment facts, **not** CashDebited/PositionIncreased (settlement deferred).
+#### Audit-only / derived (`OrderRejected`)
 
-### 9. Authoritative vs derived
+```text
+OrderRejected
+```
 
-| Authoritative | Derived (not recovery-critical) |
-|---------------|----------------------------------|
-| Types above | Market-data publications, metrics, notifications |
+**Contract (unambiguous):**
 
-Derived loss must **not** fail exchange recovery. Kafka/WS may carry derived streams without becoming source of truth.
+1. `OrderRejected` **does not participate in state reconstruction**.  
+2. `OrderRejected` is **`ClassDerived`** (audit projection).  
+3. `OrderRejected` **does not consume** the global authoritative `Event.Sequence`.  
+4. A rejected command may emit **no event at all** (default).  
+5. If product wants rejection audit, emit `OrderRejected` as derived/audit — **still not** on the state-fold path.  
+6. WAL recovery applies **only** state-authoritative events in `Event.Sequence` order.
 
-### 10. Versioning
+There is no “maybe authoritative” third state.
 
-Schema identity = `EventType + Version`. Unknown type → `ErrUnknownEventType`. Unknown version → `ErrUnknownEventVersion`. No silent empty payload.
+### 10. TradeExecuted
 
-### 11. Serialization
+One event for both sides. Domain `Execution` objects are **derived**.  
+Payload carries `TradeSequence` (domain) separately from envelope `Event.Sequence`.
 
-**JSON** (struct field order, RFC3339Nano UTC timestamps) for P5.1:
+### 11. Reservation events
 
-- Debuggable, deterministic for Go structs, good tests
-- Not optimal WAL density; binary may replace **codec only** later without changing event semantics
+Capacity commitment facts only — **not** `CashDebited` / `PositionIncreased` (settlement deferred).
 
-Same event → identical bytes on repeated `Encode`.
+### 12. Versioning
 
-### 12. Registry
+Schema identity = `EventType + Version`.  
+Unknown type → `ErrUnknownEventType`. Unknown version → `ErrUnknownEventVersion`. No silent empty payload.
 
-`(Type, Version) → Decoder` validates on decode. Default registry registers all v1 types.
+### 13. Serialization
 
-### 13. Immutability
+**JSON** (struct field order, RFC3339Nano UTC) for P5.1 — deterministic, debuggable; codec swappable later without semantic rewrite.
 
-No setters; payload stored as owned byte copy; constructors only.
+### 14. Registry
 
-### 14. Validation
+`(Type, Version) → Decoder`. All v1 types registered (including audit `OrderRejected` for decode if present on an audit stream).
 
-Envelope + payload structural coherence. Domain policy stays in domain/matching/risk.
+### 15. Immutability / validation
 
-### 15. WAL implications
+Constructors only; owned payload bytes; envelope + payload structural checks. Domain policy stays in domain/matching/risk.
 
-P5.2 writes these envelopes. P5.4/5.5 replay by global sequence. Snapshots (P5.6) are **checkpoints of state**, not a replacement for authoritative history; on conflict, **events win** after integrity checks.
+### 16. WAL implications
 
-## Alternatives
+- **Authoritative WAL stream** = state-authoritative events only, ordered by `Event.Sequence`.  
+- Audit/derived streams are optional side channels.  
+- Snapshots (P5.6) = state checkpoints; on conflict after integrity checks, **events win**.
 
-- Per-instrument sequence only → harder global recovery audit  
-- Protobuf now → better evolution, less readable early  
-- Snapshot-only WAL → loses history, weak audit  
-- Separate Execution events as authoritative → redundant with Trade  
+## Alternatives considered
+
+| Option | Why not |
+|--------|---------|
+| Every reject → state-authoritative `OrderRejected` + seq | Inflates recovery stream; rejects don’t change book/cash/pos |
+| “Optional authoritative” rejects | Non-deterministic contract — **forbidden** |
+| Per-instrument event sequence only | Harder global recovery audit for single-writer P5 |
+| Separate authoritative Execution events | Dual-write risk vs single Trade fact |
 
 ## Non-goals
 

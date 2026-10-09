@@ -44,14 +44,25 @@ func NewOrderAccepted(m Meta, p OrderAcceptedPayload) (Event, error) {
 	})
 }
 
-// NewOrderRejected constructs an optional journaled rejection fact.
+// NewOrderRejected constructs an audit-only rejection fact (ClassDerived).
+//
+// Contract (P5.1 / ADR 0029):
+//   - OrderRejected is NOT required for state reconstruction.
+//   - It does NOT consume the global authoritative event sequence.
+//   - Meta.Sequence may be 0 (unassigned) for derived/audit events.
+//   - Rejected commands may emit no event at all; if audit is desired, emit this.
 func NewOrderRejected(m Meta, p OrderRejectedPayload) (Event, error) {
-	if err := m.validate(); err != nil {
-		return Event{}, err
+	if m.ID == "" {
+		return Event{}, fmt.Errorf("%w: %w", ErrInvalidEvent, ErrInvalidEventID)
 	}
-	return New(Params{
-		ID: m.ID, Type: TypeOrderRejected, Version: V1, Class: ClassAuthoritative,
-		Sequence: m.Sequence, Timestamp: m.Timestamp,
+	if m.Timestamp.IsZero() {
+		return Event{}, fmt.Errorf("%w: %w", ErrInvalidEvent, ErrInvalidTimestamp)
+	}
+	// Derived: sequence optional (0). Do not require authoritative seq.
+	return newDerived(Params{
+		ID: m.ID, Type: TypeOrderRejected, Version: V1, Class: ClassDerived,
+		Sequence:      m.Sequence, // may be 0
+		Timestamp:     m.Timestamp,
 		CorrelationID: m.CorrelationID, CausationID: m.CausationID,
 		AggregateType: AggregateOrder, AggregateID: string(p.OrderID),
 		InstrumentID: p.InstrumentID, AccountID: p.AccountID, OrderID: p.OrderID,

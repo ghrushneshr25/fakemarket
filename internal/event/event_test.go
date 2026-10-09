@@ -234,14 +234,40 @@ func TestCancelExpirePartial(t *testing.T) {
 	}
 }
 
-func TestRejectPayload(t *testing.T) {
-	e, err := NewOrderRejected(meta("E5", 5), OrderRejectedPayload{
+func TestRejectPayload_AuditOnly(t *testing.T) {
+	// Sequence may be 0 — derived does not consume authoritative stream.
+	e, err := NewOrderRejected(Meta{ID: "E5", Sequence: 0, Timestamp: ts(), CorrelationID: "CMD-x"}, OrderRejectedPayload{
 		OrderID: "O1", AccountID: "A1", InstrumentID: "AAPL", Reason: "insufficient_bp",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Type() != TypeOrderRejected {
+	if e.Type() != TypeOrderRejected || e.IsAuthoritative() || e.Class() != ClassDerived {
+		t.Fatalf("OrderRejected must be derived/audit-only: class=%s auth=%v", e.Class(), e.IsAuthoritative())
+	}
+	if IsStateAuthoritative(TypeOrderRejected) {
+		t.Fatal("OrderRejected must not be state-authoritative")
+	}
+	raw, err := Encode(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Decode(raw, DefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.IsAuthoritative() {
+		t.Fatal()
+	}
+}
+
+func TestStateAuthoritativeSet(t *testing.T) {
+	for _, typ := range StateAuthoritativeTypes {
+		if !IsStateAuthoritative(typ) {
+			t.Fatal(typ)
+		}
+	}
+	if IsStateAuthoritative(TypeOrderRejected) {
 		t.Fatal()
 	}
 }

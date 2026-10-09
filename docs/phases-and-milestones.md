@@ -756,13 +756,12 @@ P5.7 Crash Recovery  ⏳
 
 ### Requirements
 
-1. Envelope + typed payload; EventID ≠ OrderID ≠ TradeID ≠ Sequence  
-2. **Global** authoritative sequence (starts 1; gaps/out-of-order = error)  
-3. UTC timestamp from clock context; sequence orders, not time  
-4. Correlation / causation; aggregate identity  
-5. Authoritative types: order lifecycle, TradeExecuted, reservation facts  
-6. Derived boundary documented; JSON deterministic codec + registry  
-7. No WAL I/O in this milestone  
+1. Envelope + typed payload; EventID ≠ OrderID ≠ TradeID ≠ Event.Sequence ≠ Trade.Sequence  
+2. **Global Event.Sequence** (starts 1; gaps/out-of-order = error)  
+3. UTC timestamp from clock context; Event.Sequence orders, not time  
+4. **State-authoritative set** fixed; `OrderRejected` = audit-only (no seq, no state fold)  
+5. TradeExecuted one fact both sides; reservation ≠ settlement  
+6. JSON deterministic codec + registry; no WAL I/O  
 
 ---
 

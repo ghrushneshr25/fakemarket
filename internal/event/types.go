@@ -6,15 +6,42 @@ import "github.com/ghrushneshr25/fakemarket/internal/domain"
 type Type string
 
 const (
+	// --- State-authoritative (recovery fold; consume global Event.Sequence) ---
 	TypeOrderAccepted                Type = "OrderAccepted"
-	TypeOrderRejected                Type = "OrderRejected"
 	TypeOrderCancelled               Type = "OrderCancelled"
 	TypeOrderExpired                 Type = "OrderExpired"
 	TypeTradeExecuted                Type = "TradeExecuted"
 	TypeReservationCreated           Type = "ReservationCreated"
 	TypeReservationReleased          Type = "ReservationReleased"
 	TypeReservationPartiallyReleased Type = "ReservationPartiallyReleased"
+
+	// --- Audit-only / derived (NOT required for state reconstruction) ---
+	// OrderRejected does not consume the global authoritative sequence.
+	TypeOrderRejected Type = "OrderRejected"
 )
+
+// StateAuthoritativeTypes are required for deterministic state fold / WAL recovery.
+var StateAuthoritativeTypes = []Type{
+	TypeOrderAccepted,
+	TypeOrderCancelled,
+	TypeOrderExpired,
+	TypeTradeExecuted,
+	TypeReservationCreated,
+	TypeReservationReleased,
+	TypeReservationPartiallyReleased,
+}
+
+// IsStateAuthoritative reports whether t participates in exchange state reconstruction.
+func IsStateAuthoritative(t Type) bool {
+	switch t {
+	case TypeOrderAccepted, TypeOrderCancelled, TypeOrderExpired,
+		TypeTradeExecuted,
+		TypeReservationCreated, TypeReservationReleased, TypeReservationPartiallyReleased:
+		return true
+	default:
+		return false
+	}
+}
 
 // AggregateType identifies the primary entity the event concerns.
 type AggregateType string

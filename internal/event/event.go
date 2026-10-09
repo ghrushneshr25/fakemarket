@@ -48,11 +48,24 @@ type Params struct {
 	Payload       Payload
 }
 
-// New builds a validated immutable event. Payload is marshaled into owned bytes.
+// New builds a validated immutable authoritative event (default ClassAuthoritative).
+// Payload is marshaled into owned bytes.
 func New(p Params) (Event, error) {
 	if p.Class == "" {
 		p.Class = ClassAuthoritative
 	}
+	return build(p)
+}
+
+// newDerived builds a validated derived/audit event (sequence may be 0).
+func newDerived(p Params) (Event, error) {
+	if p.Class == "" {
+		p.Class = ClassDerived
+	}
+	return build(p)
+}
+
+func build(p Params) (Event, error) {
 	if p.Version == 0 {
 		p.Version = V1
 	}
@@ -137,7 +150,9 @@ func (e Event) ValidateEnvelope() error {
 	if e.class != ClassAuthoritative && e.class != ClassDerived {
 		return fmt.Errorf("%w: %w: %s", ErrInvalidEvent, ErrUnsupportedClass, e.class)
 	}
-	if e.sequence == 0 {
+	// Authoritative events require global sequence ≥ 1.
+	// Derived/audit events (e.g. OrderRejected) may have sequence 0.
+	if e.class == ClassAuthoritative && e.sequence == 0 {
 		return fmt.Errorf("%w: %w: sequence 0 unassigned", ErrInvalidEvent, ErrInvalidSequence)
 	}
 	if e.timestamp.IsZero() {
