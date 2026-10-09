@@ -87,4 +87,11 @@ var (
 	// Price bands (P4.6)
 	ErrInvalidPriceBand   = errors.New("invalid price band")
 	ErrPriceBandViolation = errors.New("price band violation")
+
+	// Reservations (P4.7)
+	ErrInvalidReservation       = errors.New("invalid reservation")
+	ErrReservationAlreadyExists = errors.New("reservation already exists")
+	ErrReservationNotFound      = errors.New("reservation not found")
+	ErrInsufficientCashCapacity = errors.New("insufficient cash capacity")
+	ErrInsufficientPosCapacity  = errors.New("insufficient position capacity")
 )

@@ -550,7 +550,7 @@ Disk WAL, snapshots, crash recovery from durable storage
 
 Financial constraints on order acceptance: balances → positions → buying power → limits → reservations.
 
-### Phase status: 🔧 In progress (P4.1–P4.6 ✅)
+### Phase status: ✅ Complete (P4.1–P4.7)
 
 ### Roadmap
 
@@ -561,7 +561,7 @@ P4.3 Buying Power     ✅
 P4.4 Position Limits  ✅
 P4.5 Order Limits     ✅
 P4.6 Price Bands      ✅
-P4.7 Reservation Model ⏳
+P4.7 Reservation Model ✅
 ```
 
 ---
@@ -695,6 +695,27 @@ Shorts, realized/unrealized P&L, settlement, BP
 
 ---
 
+## P4.7 — Reservation Model
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Atomic capacity claim (cash + position) before accept |
+| **Code** | `internal/domain/reservation.go` |
+| **ADR** | [0028](./adr/0028-reservation-model.md) |
+
+### Requirements
+
+1. Reservation owned by OrderID; one active per order  
+2. AvailableCash = Cash − ReservedCash  
+3. AvailablePos = Limit − Position − ReservedPos (if limited)  
+4. BUY reserves cash notional + pos qty; SELL zero-capacity marker  
+5. Check+reserve atomic; no partial multi-resource claim  
+6. Release / ReleasePartial restore capacity; not settlement  
+7. Internal mutex; concurrent claims cannot over-allocate  
+
+---
+
 # P5 — Durability & Recovery
 
 ### Phase requirements (PRD)
@@ -825,14 +846,14 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | 🔧 | P4.1–P4.6 ✅; next P4.7 Reservation |
+| P4 Risk | ✅ | P4.1–P4.7 complete |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P4.7 Reservations → P5 WAL
+Next:   P5 WAL
 ```
 
 ---
@@ -844,4 +865,4 @@ Next:   P4.7 Reservations → P5 WAL
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4.6 Price Bands complete.
+**Last updated:** 2026-09-30 — P4.7 Reservation Model complete; P4 closed.
