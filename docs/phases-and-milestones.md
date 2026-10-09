@@ -679,7 +679,7 @@ Shorts, realized/unrealized P&L, settlement, BP
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Instrument static inclusive limit-price band |
 | **Code** | `internal/domain/price_band.go` |
 | **ADR** | [0027](./adr/0027-price-bands.md) |
