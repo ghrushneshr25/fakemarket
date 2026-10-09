@@ -83,4 +83,8 @@ var (
 	// Order limits (P4.5)
 	ErrInvalidOrderLimit  = errors.New("invalid order limit")
 	ErrOrderLimitExceeded = errors.New("order limit exceeded")
+
+	// Price bands (P4.6)
+	ErrInvalidPriceBand   = errors.New("invalid price band")
+	ErrPriceBandViolation = errors.New("price band violation")
 )

@@ -550,7 +550,7 @@ Disk WAL, snapshots, crash recovery from durable storage
 
 Financial constraints on order acceptance: balances → positions → buying power → limits → reservations.
 
-### Phase status: 🔧 In progress (P4.1–P4.5 ✅)
+### Phase status: 🔧 In progress (P4.1–P4.6 ✅)
 
 ### Roadmap
 
@@ -560,7 +560,7 @@ P4.2 Position         ✅
 P4.3 Buying Power     ✅
 P4.4 Position Limits  ✅
 P4.5 Order Limits     ✅
-P4.6 Price Bands      ⏳
+P4.6 Price Bands      ✅
 P4.7 Reservation Model ⏳
 ```
 
@@ -672,6 +672,26 @@ Shorts, realized/unrealized P&L, settlement, BP
 4. LIMIT and MARKET same; **no** price/position/BP  
 5. Not aggregate open-order exposure (that is P4.7)  
 6. Pure query; dedicated `ErrOrderLimitExceeded`  
+
+---
+
+## P4.6 — Price Bands
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Instrument static inclusive limit-price band |
+| **Code** | `internal/domain/price_band.go` |
+| **ADR** | [0027](./adr/0027-price-bands.md) |
+
+### Requirements
+
+1. InstrumentID → [MinPrice, MaxPrice]; Min ≤ Max; inclusive  
+2. Missing = unrestricted  
+3. LIMIT: Min ≤ price ≤ Max; BUY/SELL same  
+4. MARKET: band not applicable (no synthetic price)  
+5. No book/MD; no dynamic bands; ticks stay on Instrument  
+6. Pure; `ErrPriceBandViolation` / `ErrInvalidPriceBand`  
 
 ---
 
@@ -805,14 +825,14 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | 🔧 | P4.1–P4.5 ✅; next P4.6 Price Bands |
+| P4 Risk | 🔧 | P4.1–P4.6 ✅; next P4.7 Reservation |
 | P5 WAL | ⏳ | After risk or parallel carefully |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P4.6 Price Bands → P4.7 Reservations → P5 WAL
+Next:   P4.7 Reservations → P5 WAL
 ```
 
 ---
@@ -824,4 +844,4 @@ Next:   P4.6 Price Bands → P4.7 Reservations → P5 WAL
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4.5 Order Limits complete.
+**Last updated:** 2026-09-30 — P4.6 Price Bands complete.
