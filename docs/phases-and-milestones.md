@@ -729,7 +729,40 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P5.5 | Startup: load snapshot → replay WAL → validate invariants → READY |
 | P5.6 | Recovered state logically identical to pre-crash |
 
-### Phase status: ⏳
+### Phase status: 🔧 In progress (P5.1 ✅)
+
+### Roadmap
+
+```text
+P5.1 Event Model     ✅
+P5.2 WAL Writer      ⏳
+P5.3 WAL Reader      ⏳
+P5.4 WAL Recovery    ⏳
+P5.5 Event Replay    ⏳
+P5.6 Snapshots       ⏳
+P5.7 Crash Recovery  ⏳
+```
+
+---
+
+## P5.1 — Event Model
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Immutable authoritative event contract (pre-WAL) |
+| **Code** | `internal/event/` |
+| **ADR** | [0029](./adr/0029-event-model.md) |
+
+### Requirements
+
+1. Envelope + typed payload; EventID ≠ OrderID ≠ TradeID ≠ Sequence  
+2. **Global** authoritative sequence (starts 1; gaps/out-of-order = error)  
+3. UTC timestamp from clock context; sequence orders, not time  
+4. Correlation / causation; aggregate identity  
+5. Authoritative types: order lifecycle, TradeExecuted, reservation facts  
+6. Derived boundary documented; JSON deterministic codec + registry  
+7. No WAL I/O in this milestone  
 
 ---
 
@@ -846,14 +879,14 @@ Shorts, realized/unrealized P&L, settlement, BP
 | P1 Financial Domain | ✅ | — |
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
-| P4 Risk | ✅ | CLOSED — next P5.1 Event Model |
-| P5 WAL | ⏳ | Next: P5.1 Event Model |
+| P4 Risk | ✅ | CLOSED |
+| P5 WAL | 🔧 | P5.1 ✅; next P5.2 WAL Writer |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5.1 Event Model → WAL → Snapshots → Recovery
+Next:   P5.2 WAL Writer → Reader → Recovery → Snapshots
 ```
 
 ---
@@ -865,4 +898,4 @@ Next:   P5.1 Event Model → WAL → Snapshots → Recovery
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P4 CLOSED (CTO accepted). Next: P5.1 Event Model.
+**Last updated:** 2026-09-30 — P5.1 Event Model complete.

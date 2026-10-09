@@ -61,18 +61,14 @@ Rules:
 - authoritative sequences are persisted when the WAL/event layer exists
 - replay must regenerate the same sequence assignments for the same input
 
-### 4. Sequence scope — explicitly deferred
+### 4. Sequence scope
 
-M0.2 does **not** choose among:
+**Resolved in P5.1 (ADR 0029):** authoritative **event** sequence is **global**
+(single-writer recovery total order). Domain objects may still carry their own
+sequences (e.g. order book time priority, trade sequence) as separate namespaces.
 
-```text
-global sequence
-per-instrument sequence
-event sequence + instrument sequence
-```
-
-That choice couples to sharding, market data, and WAL design (later milestones).  
-We only standardize the type and the monotonic semantics.
+Per-instrument event sequences remain a future option for sharding; they do not
+replace the global recovery stream in P5.
 
 ### 5. Time
 

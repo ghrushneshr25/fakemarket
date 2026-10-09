@@ -11,21 +11,22 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 4  — Accounts & Risk  (complete)
-  P4.1–P4.7 Balance · Position · BP · Limits · Bands · Reservations
+Phase 5  — Durability & Recovery
+  P5.1 Event Model  (complete)
 
-Phase 3  — Matching Engine  (complete)
-Phase 2–0  (complete)
+Phase 4  — Accounts & Risk  (complete)
+Phase 3–0  (complete)
 ```
 
 What exists today:
 
-- Matching + replay (P3)
-- Risk stack: BP, limits, bands, **atomic reservations**
+- Matching + risk + **authoritative event contract** (P5.1)
+- No WAL writer yet (P5.2)
 
 What does **not** exist yet (by design):
 
-- WAL, trading APIs (P5+)
+- WAL I/O, snapshots, crash recovery (later P5)
+- Trading APIs (P6+)
 
 
 ### Progress & requirements
