@@ -735,7 +735,7 @@ Shorts, realized/unrealized P&L, settlement, BP
 
 ```text
 P5.1 Event Model     ✅
-P5.2 WAL Writer      ⏳
+P5.2 WAL Writer      ✅
 P5.3 WAL Reader      ⏳
 P5.4 WAL Recovery    ⏳
 P5.5 Event Replay    ⏳
@@ -762,6 +762,25 @@ P5.7 Crash Recovery  ⏳
 4. **State-authoritative set** fixed; `OrderRejected` = audit-only (no seq, no state fold)  
 5. TradeExecuted one fact both sides; reservation ≠ settlement  
 6. JSON deterministic codec + registry; no WAL I/O  
+
+---
+
+## P5.2 — WAL Writer
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Append-only durable event records (fsync contract) |
+| **Code** | `internal/wal/` |
+| **ADR** | [0030](./adr/0030-wal-writer.md) |
+
+### Requirements
+
+1. Binary framing: magic, WAL version, type, Event.Sequence, ts, len, payload, CRC32  
+2. State-authoritative only; strict sequence; no Event.Sequence rewrite  
+3. Append = write + flush + fsync; sync fail → not committed + faulted  
+4. Segments `segment-%08d.wal`; no split records  
+5. No reader/recovery  
 
 ---
 
@@ -879,13 +898,13 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1 CLOSED; next P5.2 WAL Writer |
+| P5 WAL | 🔧 | P5.1–P5.2 ✅; next P5.3 WAL Reader |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5.2 WAL Writer → Reader → Recovery → Snapshots
+Next:   P5.3 WAL Reader → Recovery → Replay → Snapshots
 ```
 
 ---
@@ -897,4 +916,4 @@ Next:   P5.2 WAL Writer → Reader → Recovery → Snapshots
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.1 CLOSED (CTO accepted). Next: P5.2 WAL Writer.
+**Last updated:** 2026-09-30 — P5.2 WAL Writer complete.

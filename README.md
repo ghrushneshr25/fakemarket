@@ -12,20 +12,18 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 5  — Durability & Recovery
-  P5.1 Event Model  (complete)
+  P5.1 Event Model · P5.2 WAL Writer  (complete)
 
-Phase 4  — Accounts & Risk  (complete)
-Phase 3–0  (complete)
+Phase 4–0  (complete)
 ```
 
 What exists today:
 
-- Matching + risk + **authoritative event contract** (P5.1)
-- No WAL writer yet (P5.2)
+- Matching + risk + event contract + **append-only WAL writer** (fsync)
 
 What does **not** exist yet (by design):
 
-- WAL I/O, snapshots, crash recovery (later P5)
+- WAL reader / recovery / snapshots (P5.3+)
 - Trading APIs (P6+)
 
 
