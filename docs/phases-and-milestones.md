@@ -699,7 +699,7 @@ Shorts, realized/unrealized P&L, settlement, BP
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted; Q25 clarified) |
 | **Objective** | Atomic capacity claim (cash + position) before accept |
 | **Code** | `internal/domain/reservation.go` |
 | **ADR** | [0028](./adr/0028-reservation-model.md) |
