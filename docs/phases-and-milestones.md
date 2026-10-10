@@ -739,7 +739,7 @@ P5.2 WAL Writer      ✅
 P5.3 WAL Reader      ✅
 P5.4 WAL Recovery    ✅
 P5.5 Event Replay    ✅
-P5.6 Snapshots       ⏳
+P5.6 Snapshots       ✅
 P5.7 Crash Recovery  ⏳
 ```
 
@@ -839,6 +839,25 @@ P5.7 Crash Recovery  ⏳
 2. Inclusive `ThroughSequence`; read-only WAL  
 3. Full replay ≡ recovery (CompareCanonical)  
 4. No match / no re-risk / no invent; truncated tail fails (use RecoverTail to repair)  
+
+---
+
+## P5.6 — Snapshots
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Durable state checkpoints; suffix replay via ApplyEvent |
+| **Code** | `internal/recovery/snapshot.go` |
+| **ADR** | [0034](./adr/0034-snapshots.md) |
+
+### Requirements
+
+1. Versioned SNAP frame + CRC; seq envelope = state  
+2. Atomic tmp→sync→rename publication  
+3. Restore + WAL_{>N} via shared ApplyEvent  
+4. Full recover ≡ snapshot+suffix (CompareCanonical)  
+5. Fallback full WAL on bad snapshot; fail on bad suffix  
 
 ---
 
@@ -956,13 +975,13 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.5 CLOSED; next P5.6 Snapshots |
+| P5 WAL | 🔧 | P5.1–P5.6 ✅; next P5.7 Crash Recovery |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5.6 Snapshots → P5.7 Crash Recovery
+Next:   P5.7 Crash Recovery / ops
 ```
 
 ---
@@ -974,4 +993,4 @@ Next:   P5.6 Snapshots → P5.7 Crash Recovery
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.5 CLOSED (CTO accepted). Next: P5.6 Snapshots.
+**Last updated:** 2026-09-30 — P5.6 Snapshots complete.

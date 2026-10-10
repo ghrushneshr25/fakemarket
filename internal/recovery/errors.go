@@ -23,4 +23,11 @@ var (
 	ErrUnknownInstrument         = errors.New("unknown instrument")
 	ErrSequenceMismatch          = errors.New("recovery sequence mismatch")
 	ErrPartialState              = errors.New("partial recovery state not publishable")
+
+	// Snapshots (P5.6)
+	ErrInvalidSnapshot        = errors.New("invalid snapshot")
+	ErrSnapshotCorrupt        = errors.New("snapshot corrupt")
+	ErrUnsupportedSnapVersion = errors.New("unsupported snapshot version")
+	ErrSnapshotSequence       = errors.New("snapshot sequence mismatch")
+	ErrSnapshotIncompatible   = errors.New("snapshot incompatible with wal")
 )
