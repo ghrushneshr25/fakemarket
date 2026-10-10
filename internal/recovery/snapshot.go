@@ -509,30 +509,96 @@ func cloneAccounts(in map[domain.AccountID]*domain.Account) map[domain.AccountID
 	return out
 }
 
-// foldSuffix reads entire WAL; skips apply for seq<=after; requires first applied == after+1 or empty suffix.
+// foldSuffix reads the WAL and applies only events with seq > after (snapshot boundary N).
+//
+// Continuity policy (Q99/Q100 hardening):
+//
+//  1. Suffix-only WAL: first event is exactly after+1 (prefix may have been retained elsewhere).
+//  2. Full WAL with prefix: events 1..after must appear continuously while skipping (proves
+//     the snapshot boundary exists in this WAL history), then apply after+1...
+//  3. Empty WAL + after > 0: incompatible — no evidence the snapshot belongs to this WAL.
+//  4. WAL ends at k < after while skipping prefix: incompatible — cannot establish boundary N.
+//  5. Gap before or after boundary: fail (never omit history).
 func foldSuffix(r *wal.Reader, s *State, after domain.Sequence) error {
-	sawAfter := false
+	if after == 0 {
+		// Snapshot at genesis: full fold from seq 1.
+		for {
+			ev, err := r.Next()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if err := s.ApplyEvent(ev); err != nil {
+				return err
+			}
+		}
+	}
+
+	var (
+		// prefixMode: true once we see seq==1 (full history present).
+		// false until first event; empty WAL handled at EOF.
+		sawAny     bool
+		prefixNext domain.Sequence = 1 // expected next while verifying 1..after
+		applying   bool                // true after first seq > after
+	)
+
 	for {
 		ev, err := r.Next()
 		if err == io.EOF {
+			if !sawAny {
+				return fmt.Errorf("%w: empty WAL cannot prove snapshot seq %d", ErrSnapshotIncompatible, after)
+			}
+			if !applying {
+				// Only saw prefix (or partial prefix).
+				if prefixNext <= after {
+					return fmt.Errorf("%w: WAL ends at seq %d before snapshot boundary %d",
+						ErrSnapshotIncompatible, prefixNext-1, after)
+				}
+				// prefixNext == after+1: verified full 1..after, empty suffix — OK.
+			}
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+		sawAny = true
 		seq := ev.Sequence()
-		if seq <= after {
-			continue
-		}
-		if !sawAfter {
-			if seq != after+1 && after != 0 {
+
+		if !applying {
+			if seq <= after {
+				// Verifying prefix continuity 1..after (full-WAL case).
+				if seq != prefixNext {
+					return fmt.Errorf("%w: prefix gap want %d got %d", ErrSequenceMismatch, prefixNext, seq)
+				}
+				prefixNext++
+				continue
+			}
+			// seq > after: start suffix.
+			// Allowed:
+			//   - prefixNext == after+1 (just finished verifying 1..after), first suffix after+1
+			//   - prefixNext == 1 && !saw prefix events... wait we saw this event so prefixNext still 1
+			//     means first event in WAL is > after → suffix-only, must be after+1
+			if prefixNext == 1 {
+				// No prefix events observed; suffix-only WAL.
+				if seq != after+1 {
+					return fmt.Errorf("%w: suffix-only WAL want first seq %d got %d", ErrSnapshotIncompatible, after+1, seq)
+				}
+			} else if prefixNext != after+1 {
+				return fmt.Errorf("%w: incomplete prefix before suffix (next would be %d, boundary %d)",
+					ErrSnapshotIncompatible, prefixNext, after)
+			} else if seq != after+1 {
 				return fmt.Errorf("%w: want %d got %d", ErrSequenceMismatch, after+1, seq)
 			}
-			if after == 0 && seq != 1 {
-				return fmt.Errorf("%w: want 1 got %d", ErrSequenceMismatch, seq)
+			applying = true
+			if err := s.ApplyEvent(ev); err != nil {
+				return err
 			}
-			sawAfter = true
+			continue
 		}
+
+		// Already applying suffix — ApplyEvent enforces monotonic +1.
 		if err := s.ApplyEvent(ev); err != nil {
 			return err
 		}

@@ -42,6 +42,22 @@ Hydrate orders via lifecycle; rebuild books from FIFO levels; Restore reservatio
 Newest valid snapshot by sequence; on load failure try next; if none and `fallbackFull` → full `RecoverDir` Strict.  
 Corrupt **WAL suffix** after a good snapshot → **fail** (never omit history).
 
+### Snapshot ↔ WAL continuity (Q99/Q100)
+
+An internally valid snapshot is **not** automatically consistent with the open WAL.
+
+`foldSuffix` requires one of:
+
+| WAL shape | Rule |
+|-----------|------|
+| Empty + snap N>0 | **Reject** `ErrSnapshotIncompatible` |
+| Full history | Must observe continuous events **1..N** while skipping, then apply **N+1…** |
+| Suffix-only | First event must be **N+1** (no partial prefix) |
+| WAL ends before N | **Reject** (cannot establish boundary N) |
+| Gap after N | **Reject** (existing sequence rules) |
+
+**Limitation:** Sequence continuity still cannot detect a **replaced WAL** that reuses the same sequence numbers with different event IDs (no WAL epoch/generation in format yet). Future: bind snapshot to WAL identity/epoch.
+
 ### Non-goals
 
 Background scheduling, retention, distributed snapshots.

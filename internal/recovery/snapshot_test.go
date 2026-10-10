@@ -171,3 +171,64 @@ func TestSnapshot_AtomicNoPartial(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Q100: snapshot at N with empty WAL must not succeed.
+func TestSnapshot_EmptyWALIncompatible(t *testing.T) {
+	walDir := t.TempDir()
+	snapDir := t.TempDir()
+	reg, _ := seed(t)
+	px := domain.Price(10)
+	e1, _ := event.NewOrderAccepted(meta("E1", 1), event.OrderAcceptedPayload{
+		OrderID: "O1", AccountID: "A1", InstrumentID: "AAPL",
+		Side: domain.SideBuy, Type: domain.OrderTypeLimit, Quantity: 1, Price: &px, OrderSequence: 1,
+	})
+	writeEvents(t, t.TempDir(), []event.Event{e1}) // throwaway to get state via recover
+	tmp := t.TempDir()
+	writeEvents(t, tmp, []event.Event{e1})
+	rec, err := RecoverDir(Config{Mode: ModeStrict, Instruments: reg, Accounts: cloneAccts2(t), WALDir: tmp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateSnapshot(snapDir, rec.State); err != nil {
+		t.Fatal(err)
+	}
+	// empty walDir
+	_, err = RecoverWithSnapshot(Config{
+		Instruments: reg, Accounts: cloneAccts2(t), WALDir: walDir,
+	}, snapDir, false)
+	if !errors.Is(err, ErrSnapshotIncompatible) {
+		t.Fatalf("want incompatible, got %v", err)
+	}
+}
+
+// Q100: WAL shorter than snapshot boundary (events 1..1, snap at 2) fails.
+func TestSnapshot_WALShorterThanBoundary(t *testing.T) {
+	walDir := t.TempDir()
+	snapDir := t.TempDir()
+	reg, _ := seed(t)
+	px := domain.Price(10)
+	e1, _ := event.NewOrderAccepted(meta("E1", 1), event.OrderAcceptedPayload{
+		OrderID: "O1", AccountID: "A1", InstrumentID: "AAPL",
+		Side: domain.SideBuy, Type: domain.OrderTypeLimit, Quantity: 1, Price: &px, OrderSequence: 1,
+	})
+	e2, _ := event.NewOrderAccepted(meta("E2", 2), event.OrderAcceptedPayload{
+		OrderID: "O2", AccountID: "A1", InstrumentID: "AAPL",
+		Side: domain.SideBuy, Type: domain.OrderTypeLimit, Quantity: 1, Price: &px, OrderSequence: 2,
+	})
+	full := t.TempDir()
+	writeEvents(t, full, []event.Event{e1, e2})
+	rec, err := RecoverDir(Config{Mode: ModeStrict, Instruments: reg, Accounts: cloneAccts2(t), WALDir: full})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateSnapshot(snapDir, rec.State); err != nil { // snap at 2
+		t.Fatal(err)
+	}
+	writeEvents(t, walDir, []event.Event{e1}) // only seq 1
+	_, err = RecoverWithSnapshot(Config{
+		Instruments: reg, Accounts: cloneAccts2(t), WALDir: walDir,
+	}, snapDir, false)
+	if !errors.Is(err, ErrSnapshotIncompatible) {
+		t.Fatalf("want incompatible, got %v", err)
+	}
+}
