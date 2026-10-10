@@ -807,10 +807,11 @@ P5.7 Crash Recovery  ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Fold trusted events → deterministic exchange state |
 | **Code** | `internal/recovery/` |
 | **ADR** | [0032](./adr/0032-wal-recovery.md) |
+| **Commit** | `9b76356` |
 
 ### Requirements
 
@@ -936,7 +937,7 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.4 ✅; next P5.5 Event Replay |
+| P5 WAL | 🔧 | P5.1–P5.4 CLOSED; next P5.5 Event Replay |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
@@ -954,4 +955,4 @@ Next:   P5.5 Event Replay → Snapshots → Crash Recovery
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.4 WAL Recovery complete.
+**Last updated:** 2026-09-30 — P5.4 CLOSED (CTO accepted). Next: P5.5 Event Replay.
