@@ -11,20 +11,19 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 5  — Durability & Recovery
-  P5.1–P5.6 Event · WAL · Recovery · Replay · Snapshots  (complete)
+Phase 5  — Durability & Recovery  (complete P5.1–P5.7)
+  Events · WAL · Recovery · Replay · Snapshots · Crash restart
 
 Phase 4–0  (complete)
 ```
 
 What exists today:
 
-- Full durability stack through **snapshot + WAL suffix recovery**
+- Full durability + **startup recover + safe writer resume**
 
 What does **not** exist yet (by design):
 
-- Crash harness / ops scheduling (P5.7+)
-- Trading APIs (P6+)
+- WAL epoch/identity, client exactly-once, trading APIs (P6+)
 
 
 ### Progress & requirements

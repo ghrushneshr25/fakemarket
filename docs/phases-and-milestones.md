@@ -740,7 +740,7 @@ P5.3 WAL Reader      ✅
 P5.4 WAL Recovery    ✅
 P5.5 Event Replay    ✅
 P5.6 Snapshots       ✅
-P5.7 Crash Recovery  ⏳
+P5.7 Crash Recovery  ✅
 ```
 
 ---
@@ -862,6 +862,24 @@ P5.7 Crash Recovery  ⏳
 
 ---
 
+## P5.7 — Crash Recovery
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Restart: recover → validate → resume writer safely |
+| **Code** | `wal.OpenResumed`, `recovery.StartupRecover` / `ResumeWriter` |
+| **ADR** | [0035](./adr/0035-crash-recovery.md) |
+
+### Requirements
+
+1. Durable = Append nil after fsync; faulted on sync fail  
+2. StartupRecover Strict default; Ready only if full OK  
+3. OpenResumed verifies disk last seq == recovery; SeenEventIDs from WAL fold  
+4. Crash-boundary + restart tests  
+
+---
+
 # P6 — APIs & Market Data
 
 ### Phase requirements (PRD)
@@ -976,13 +994,13 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.6 CLOSED; next P5.7 Crash Recovery |
+| P5 WAL | ✅ | P5.1–P5.7 complete |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5.7 Crash Recovery / ops
+Next:   P6 APIs & Market Data
 ```
 
 ---
@@ -994,4 +1012,4 @@ Next:   P5.7 Crash Recovery / ops
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.6 CLOSED (CTO accepted). Next: P5.7 Crash Recovery.
+**Last updated:** 2026-09-30 — P5.7 Crash Recovery complete; Phase 5 closed.

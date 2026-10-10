@@ -21,6 +21,7 @@ var (
 	ErrInvalidMagic          = errors.New("invalid wal magic")
 	ErrUnsupportedVersion    = errors.New("unsupported wal version")
 	ErrInvalidConfig         = errors.New("invalid wal config")
+	ErrResumeMismatch        = errors.New("wal resume sequence mismatch")
 
 	// Reader (P5.3)
 	ErrChecksumMismatch   = errors.New("wal checksum mismatch")

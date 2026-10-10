@@ -317,6 +317,106 @@ func (w *Writer) LastSequence() uint64 {
 	return w.lastSequence
 }
 
+// ResumeState is verified recovery output used to reopen a writer after crash.
+// LastSequence must equal the last Event.Sequence on the durable WAL (verified when VerifyWAL).
+// SeenEventIDs should be the full set of EventIDs observed while folding that WAL
+// (not merely IDs still present in live engine objects).
+type ResumeState struct {
+	LastSequence uint64
+	SeenEventIDs []string
+	// VerifyWAL when true (default recommended) scans the WAL and requires
+	// reader.LastSequence() == LastSequence before allowing resume.
+	VerifyWAL bool
+}
+
+// OpenResumed opens a writer for appends after successful recovery.
+// Next Append must use Event.Sequence == LastSequence+1 (or 1 if LastSequence==0).
+//
+// Preconditions: caller recovered and validated state from the same WALDir.
+// This API still verifies disk last sequence when VerifyWAL is true.
+func OpenResumed(cfg Config, rs ResumeState) (*Writer, error) {
+	if err := cfg.normalize(); err != nil {
+		return nil, err
+	}
+	// Always verify disk last sequence — never trust caller-supplied seq alone (CTO).
+	got, err := scanLastSequence(cfg.Dir, cfg.MaxPayloadBytes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: verify wal: %w", ErrResumeMismatch, err)
+	}
+	if got != rs.LastSequence {
+		return nil, fmt.Errorf("%w: claimed %d disk %d", ErrResumeMismatch, rs.LastSequence, got)
+	}
+	_ = rs.VerifyWAL // reserved for future opt-out in tests only
+
+	w := &Writer{
+		cfg:     cfg,
+		seenIDs: make(map[string]struct{}),
+	}
+	w.lastSequence = rs.LastSequence
+	for _, id := range rs.SeenEventIDs {
+		if id != "" {
+			w.seenIDs[id] = struct{}{}
+		}
+	}
+	// Open for append: find highest segment or create first.
+	if err := w.openForResume(); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+// scanLastSequence reads the WAL and returns the last validated Event.Sequence (0 if empty).
+func scanLastSequence(dir string, maxPayload int) (uint64, error) {
+	rd, err := OpenReader(ReaderConfig{Dir: dir, MaxPayloadBytes: maxPayload})
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rd.Close() }()
+	for {
+		_, err := rd.Next()
+		if err == io.EOF {
+			return rd.LastSequence(), nil
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+}
+
+// openForResume attaches to the latest existing segment for append, or creates segment 1.
+func (w *Writer) openForResume() error {
+	ents, err := os.ReadDir(w.cfg.Dir)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	var maxIdx uint64
+	for _, e := range ents {
+		var idx uint64
+		if _, err := fmt.Sscanf(e.Name(), "segment-%08d.wal", &idx); err == nil && idx > maxIdx {
+			maxIdx = idx
+		}
+	}
+	if maxIdx == 0 {
+		return w.openNextSegment() // creates 00000001
+	}
+	w.segIndex = maxIdx
+	path := filepath.Join(w.cfg.Dir, segmentName(maxIdx))
+	f, err := w.cfg.openFile(path)
+	if err != nil {
+		return fmt.Errorf("%w: resume open: %w", ErrWriteFailed, err)
+	}
+	// File already has header; measure size
+	fi, err := os.Stat(path)
+	if err != nil {
+		_ = f.Close()
+		return err
+	}
+	w.seg = f
+	w.segPath = path
+	w.segBytes = fi.Size()
+	return nil
+}
+
 // Faulted reports whether the writer refused further appends after a durability failure.
 func (w *Writer) Faulted() bool {
 	w.mu.Lock()
