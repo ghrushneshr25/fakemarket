@@ -377,6 +377,25 @@ func (s *ReservationStore) applySubLocked(r Reservation) error {
 	return nil
 }
 
+// Restore injects a historically committed reservation during WAL recovery.
+// Does not re-check buying power or position capacity (those were decided at accept time).
+// Duplicate OrderID → ErrReservationAlreadyExists.
+func (s *ReservationStore) Restore(r Reservation) error {
+	if err := r.Validate(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.byOrder[r.OrderID]; exists {
+		return fmt.Errorf("%w: order %s", ErrReservationAlreadyExists, r.OrderID)
+	}
+	if err := s.applyAddLocked(r); err != nil {
+		return err
+	}
+	s.byOrder[r.OrderID] = r
+	return nil
+}
+
 // ReleasePartial reduces an existing reservation after a partial fill.
 //
 // cashRelease / posRelease are amounts to free (not the new totals).

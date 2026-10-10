@@ -737,7 +737,7 @@ Shorts, realized/unrealized P&L, settlement, BP
 P5.1 Event Model     ✅
 P5.2 WAL Writer      ✅
 P5.3 WAL Reader      ✅
-P5.4 WAL Recovery    ⏳
+P5.4 WAL Recovery    ✅
 P5.5 Event Replay    ⏳
 P5.6 Snapshots       ⏳
 P5.7 Crash Recovery  ⏳
@@ -800,6 +800,25 @@ P5.7 Crash Recovery  ⏳
 2. Frame/CRC/schema/state-authoritative/sequence/EventID checks  
 3. Truncation ≠ clean EOF; no skip/repair  
 4. Streaming `Next()`; no state mutation  
+
+---
+
+## P5.4 — WAL Recovery
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Fold trusted events → deterministic exchange state |
+| **Code** | `internal/recovery/` |
+| **ADR** | [0032](./adr/0032-wal-recovery.md) |
+
+### Requirements
+
+1. Empty start + seed instruments/accounts; apply by Event.Sequence  
+2. All 7 state-authoritative event types  
+3. No match / no risk re-run / no invent events  
+4. Strict vs RecoverTail (final truncation only)  
+5. Deterministic Snapshot compare  
 
 ---
 
@@ -917,13 +936,13 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.3 CLOSED; next P5.4 WAL Recovery |
+| P5 WAL | 🔧 | P5.1–P5.4 ✅; next P5.5 Event Replay |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5.4 WAL Recovery → Replay → Snapshots
+Next:   P5.5 Event Replay → Snapshots → Crash Recovery
 ```
 
 ---
@@ -935,4 +954,4 @@ Next:   P5.4 WAL Recovery → Replay → Snapshots
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.3 CLOSED (CTO accepted). Next: P5.4 WAL Recovery.
+**Last updated:** 2026-09-30 — P5.4 WAL Recovery complete.
