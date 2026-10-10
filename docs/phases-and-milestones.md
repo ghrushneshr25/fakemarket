@@ -846,10 +846,11 @@ P5.7 Crash Recovery  ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted + continuity harden) |
 | **Objective** | Durable state checkpoints; suffix replay via ApplyEvent |
 | **Code** | `internal/recovery/snapshot.go` |
 | **ADR** | [0034](./adr/0034-snapshots.md) |
+| **Commits** | `969ee86` feature · `49b38e3` Q99/Q100 continuity |
 
 ### Requirements
 
@@ -975,7 +976,7 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.6 ✅; next P5.7 Crash Recovery |
+| P5 WAL | 🔧 | P5.1–P5.6 CLOSED; next P5.7 Crash Recovery |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
@@ -993,4 +994,4 @@ Next:   P5.7 Crash Recovery / ops
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.6 Snapshots complete.
+**Last updated:** 2026-09-30 — P5.6 CLOSED (CTO accepted). Next: P5.7 Crash Recovery.
