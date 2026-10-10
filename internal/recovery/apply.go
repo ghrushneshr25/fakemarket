@@ -8,6 +8,12 @@ import (
 	"github.com/ghrushneshr25/fakemarket/internal/event"
 )
 
+// ApplyEvent applies one validated authoritative event to State.
+// Shared fold used by Recover and Replay — single implementation of domain transitions.
+func (s *State) ApplyEvent(ev event.Event) error {
+	return s.apply(ev)
+}
+
 func (s *State) apply(ev event.Event) error {
 	id := string(ev.ID())
 	if _, ok := s.seenEventIDs[id]; ok {

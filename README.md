@@ -12,18 +12,18 @@ FakeMarket models order processing, order books, matching, risk, financial state
 
 ```text
 Phase 5  — Durability & Recovery
-  P5.1–P5.4 Event · WAL · Recovery  (complete)
+  P5.1–P5.5 Event · WAL · Recovery · Replay  (complete)
 
 Phase 4–0  (complete)
 ```
 
 What exists today:
 
-- Matching + risk + events + WAL write/read + **state recovery fold**
+- Matching + risk + events + WAL + recovery + **deterministic event replay**
 
 What does **not** exist yet (by design):
 
-- Snapshots / crash harness (P5.5–P5.7)
+- Snapshots / crash harness (P5.6–P5.7)
 - Trading APIs (P6+)
 
 

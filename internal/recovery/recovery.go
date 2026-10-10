@@ -63,7 +63,7 @@ func Recover(r *wal.Reader, cfg Config) (*Result, error) {
 			}
 			return nil, fmt.Errorf("%w: %w", ErrUnrecoverableTail, err)
 		}
-		if err := tmp.apply(ev); err != nil {
+		if err := tmp.ApplyEvent(ev); err != nil {
 			return nil, err
 		}
 		applied = append(applied, ev)

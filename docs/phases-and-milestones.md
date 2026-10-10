@@ -738,7 +738,7 @@ P5.1 Event Model     ✅
 P5.2 WAL Writer      ✅
 P5.3 WAL Reader      ✅
 P5.4 WAL Recovery    ✅
-P5.5 Event Replay    ⏳
+P5.5 Event Replay    ✅
 P5.6 Snapshots       ⏳
 P5.7 Crash Recovery  ⏳
 ```
@@ -820,6 +820,24 @@ P5.7 Crash Recovery  ⏳
 3. No match / no risk re-run / no invent events  
 4. Strict vs RecoverTail (final truncation only)  
 5. Deterministic Snapshot compare  
+
+---
+
+## P5.5 — Event Replay
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Controlled deterministic replay + sequence-bounded prefix |
+| **Code** | `internal/recovery/replay.go` (`ApplyEvent` shared fold) |
+| **ADR** | [0033](./adr/0033-event-replay.md) |
+
+### Requirements
+
+1. Same fold as recovery (`State.ApplyEvent`)  
+2. Inclusive `ThroughSequence`; read-only WAL  
+3. Full replay ≡ recovery (CompareCanonical)  
+4. No match / no re-risk / no invent; truncated tail fails (use RecoverTail to repair)  
 
 ---
 
@@ -937,13 +955,13 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.4 CLOSED; next P5.5 Event Replay |
+| P5 WAL | 🔧 | P5.1–P5.5 ✅; next P5.6 Snapshots |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P5.5 Event Replay → Snapshots → Crash Recovery
+Next:   P5.6 Snapshots → P5.7 Crash Recovery
 ```
 
 ---
@@ -955,4 +973,4 @@ Next:   P5.5 Event Replay → Snapshots → Crash Recovery
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.4 CLOSED (CTO accepted). Next: P5.5 Event Replay.
+**Last updated:** 2026-09-30 — P5.5 Event Replay complete.
