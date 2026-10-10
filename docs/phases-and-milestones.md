@@ -827,10 +827,11 @@ P5.7 Crash Recovery  ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Controlled deterministic replay + sequence-bounded prefix |
 | **Code** | `internal/recovery/replay.go` (`ApplyEvent` shared fold) |
 | **ADR** | [0033](./adr/0033-event-replay.md) |
+| **Commit** | `63176d9` |
 
 ### Requirements
 
@@ -955,7 +956,7 @@ P5.7 Crash Recovery  ⏳
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | 🔧 | P5.1–P5.5 ✅; next P5.6 Snapshots |
+| P5 WAL | 🔧 | P5.1–P5.5 CLOSED; next P5.6 Snapshots |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
@@ -973,4 +974,4 @@ Next:   P5.6 Snapshots → P5.7 Crash Recovery
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.5 Event Replay complete.
+**Last updated:** 2026-09-30 — P5.5 CLOSED (CTO accepted). Next: P5.6 Snapshots.

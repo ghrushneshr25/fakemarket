@@ -30,6 +30,8 @@ P5.4 recovers authoritative state. Operators also need controlled, deterministic
 `ThroughSequence == 0`: full stream to EOF.  
 If stream ends before N: success with `Complete=false`, state = available prefix.
 
+**Callers must not treat `Complete=false` as proof that sequence N was reached** — only that replay finished without error on a shorter history.
+
 ### Validation
 
 Replay relies on P5.3 for CRC/schema/sequence continuity. Later corruption after a prefix stop may be unread; stopping after applying N does not re-validate unread tail. Full replay still fails on any reader error.
