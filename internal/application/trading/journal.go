@@ -133,21 +133,14 @@ func (x *InstrumentExecutor) appendReservationStepsForSubmit(oid domain.OrderID,
 		}
 		*steps = append(*steps, st)
 	}
-	if live.RemainingQuantity() == 0 && (cashLeft > 0 || posLeft > 0 || ok) {
+	if live.RemainingQuantity() == 0 && (cashLeft > 0 || posLeft > 0) {
 		st, err := event.StepFromPayload(event.ReservationReleasedPayload{
 			OrderID: oid, Cash: cashLeft, PositionQuantity: posLeft,
 		})
 		if err != nil {
 			return err
 		}
-		// If we already partially released to zero, still emit full release of remainder 0? skip if both 0 and no residual
-		if cashLeft > 0 || posLeft > 0 {
-			*steps = append(*steps, st)
-		} else if len(trades) == 0 {
-			// resting order keeps reservation — no release step
-		} else {
-			// fully consumed via partials — optional final release of zeros omitted
-		}
+		*steps = append(*steps, st)
 	}
 	return nil
 }
