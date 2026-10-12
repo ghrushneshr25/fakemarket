@@ -75,9 +75,29 @@ If Append fails: no durable command (batch absent); in-memory may be dirty → R
 Tests: `TestQ2A_*`, `TestQ2B_*`, `TestQ2C_*`, `TestRecover_CommandBatch_AllOrNone`.
 
 
-### Ordering
+### Ordering / concurrency (P6.1-C1)
 
-Per-instrument single-writer mutex wraps risk→reserve→match→WAL fsync (correctness over latency; P7 measures contention).
+```text
+InstrumentExecutor (per InstrumentID)
+  └── x.mu  single-writer: book, engine orders, instrument-local maps
+
+Shared process resources
+  ├── wal.Writer.mu     serializes Append (expected)
+  ├── eventSeq atomic   global sequence
+  └── accounts map      NOT single-writer across instruments
+```
+
+| Claim | P6.1 status |
+|---|---|
+| One executor + OrderBook per InstrumentID | ✅ |
+| Same-instrument commands serialized | ✅ (`x.mu`) |
+| AAPL vs TSLA matching critical sections may overlap | ✅ (proven by `TestC1_DifferentInstrumentsCriticalSectionsOverlap`) |
+| Shared WAL + `journalMu` (seq assign + Append atomic) | ✅ expected durability ordering |
+| Concurrent multi-instrument mutation of the **same Account** | ❌ **not supported** |
+
+**Boundary (explicit):** `InstrumentExecutor` owns instrument/matching state. Account cash/positions are account-domain state. P6.1 does **not** introduce a global account mutex (that would collapse instrument lanes). Concurrent Submit across instruments is supported only with **disjoint account sets** (or sequential use of a shared account). Full account/risk ownership protocol is deferred (post-P6 / P9-class).
+
+Tests: `TestC1_*` + `go test -race`.
 
 ### Auth
 
@@ -85,8 +105,8 @@ P6.1 development trusts `account_id` on the command; principal→account enforce
 
 ## Non-goals
 
-REST, query APIs, market data, FIX, durable idempotency store.
+REST, query APIs, market data, FIX, durable idempotency store, global account lock, account-sharded executors.
 
 ## Status
 
-Accepted
+Accepted (P6.1-C1 concurrency boundary documented + tested)

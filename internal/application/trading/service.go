@@ -3,6 +3,7 @@ package trading
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 )
@@ -12,24 +13,25 @@ import (
 type Service struct {
 	router *Router
 	idem   *IdempotencyStore
-	ready  bool
+	ready  atomic.Bool
 }
 
 // NewService constructs a TradingService.
 func NewService(router *Router) *Service {
-	return &Service{
+	s := &Service{
 		router: router,
 		idem:   NewIdempotencyStore(),
-		ready:  true,
 	}
+	s.ready.Store(true)
+	return s
 }
 
-// SetReady controls command admission (startup gate).
-func (s *Service) SetReady(v bool) { s.ready = v }
+// SetReady controls command admission (startup gate). Safe for concurrent use.
+func (s *Service) SetReady(v bool) { s.ready.Store(v) }
 
 // Submit handles SubmitOrderCommand.
 func (s *Service) Submit(ctx context.Context, cmd SubmitOrderCommand) (SubmitOrderResult, error) {
-	if !s.ready {
+	if !s.ready.Load() {
 		return SubmitOrderResult{}, ErrNotReady
 	}
 	if err := ctx.Err(); err != nil {
@@ -54,7 +56,7 @@ func (s *Service) Submit(ctx context.Context, cmd SubmitOrderCommand) (SubmitOrd
 
 // Cancel handles CancelOrderCommand.
 func (s *Service) Cancel(ctx context.Context, cmd CancelOrderCommand) (CancelOrderResult, error) {
-	if !s.ready {
+	if !s.ready.Load() {
 		return CancelOrderResult{}, ErrNotReady
 	}
 	if err := ctx.Err(); err != nil {

@@ -914,7 +914,7 @@ P6.6 MD Gap Recovery          ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ CLOSED (Q1 Option A idempotency; Q2 CommandBatch atomicity; Q3 reservations) |
+| **Status** | ✅ CLOSED (Q1 idempotency; Q2 CommandBatch; Q3 reservations; C1 multi-instrument concurrency boundary) |
 | **Objective** | Transport-independent commands + gRPC adapter |
 | **Code** | `internal/application/trading`, `internal/transport/grpc`, `api/proto` |
 | **ADR** | [0036](./adr/0036-trading-service-and-grpc.md) |

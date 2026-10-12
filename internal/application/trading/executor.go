@@ -33,24 +33,48 @@ type InstrumentExecutor struct {
 	ordLimits  *domain.OrderLimitStore
 	priceBands *domain.PriceBandStore
 
-	wal      *wal.Writer
-	eventSeq *atomic.Uint64
-	orderSeq atomic.Uint64
-	orderIDs atomic.Uint64
-	clock    func() time.Time
+	wal       *wal.Writer
+	eventSeq  *atomic.Uint64
+	journalMu *sync.Mutex // shared: nextEventSeq + Append must be atomic across instruments
+	orderSeq  atomic.Uint64
+	orderIDs  atomic.Uint64
+	clock     func() time.Time
 
 	orderAccount map[domain.OrderID]domain.AccountID
 	tradeCursor  int
 	faulted      bool
 	onFault      func()
+	probe        ConcurrencyProbe
 }
 
-// ExecutorDeps wires shared process resources.
+// ConcurrencyProbe is optional observation of the per-instrument critical section.
+// Used by P6.1-C1 tests; production leaves it zero.
+type ConcurrencyProbe struct {
+	OnEnterCritical func(id domain.InstrumentID)
+	OnLeaveCritical func(id domain.InstrumentID)
+	// HoldCritical, if set, is called while x.mu is held (after enter, before work).
+	// Tests use this to prove two instruments can hold distinct locks concurrently.
+	HoldCritical func(id domain.InstrumentID)
+}
+
+// ExecutorDeps wires process resources.
+//
+// Concurrency model (P6.1-C1):
+//   - Instrument/matching state: single-writer per InstrumentExecutor (x.mu).
+//   - WAL durability: shared Writer; journalMu makes (eventSeq assign + Append) atomic
+//     across instruments so WAL sequence order matches allocation order.
+//   - Account cash/positions: NOT safe for concurrent mutation from multiple
+//     instrument executors. Supported concurrent multi-instrument traffic must
+//     use disjoint accounts (or run instruments sequentially). No global account
+//     mutex — account ownership is a later milestone.
 type ExecutorDeps struct {
 	Instrument domain.Instrument
 	Accounts   map[domain.AccountID]*domain.Account
 	WAL        *wal.Writer
 	EventSeq   *atomic.Uint64
+	// JournalMu serializes sequence allocation + WAL.Append across executors.
+	// Matching remains under per-instrument x.mu only.
+	JournalMu  *sync.Mutex
 	Res        *domain.ReservationStore
 	PosLimits  *domain.PositionLimitStore
 	OrdLimits  *domain.OrderLimitStore
@@ -58,6 +82,7 @@ type ExecutorDeps struct {
 	Clock      func() time.Time
 	// OnDurableFailure is called if WAL append fails after state mutation (match/reserve).
 	OnDurableFailure func()
+	Probe            ConcurrencyProbe
 }
 
 // NewInstrumentExecutor constructs a single-instrument execution context.
@@ -68,6 +93,9 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 	}
 	if d.EventSeq == nil || d.WAL == nil {
 		return nil, fmt.Errorf("%w: missing wal/eventseq", ErrEngineUnavailable)
+	}
+	if d.JournalMu == nil {
+		d.JournalMu = &sync.Mutex{}
 	}
 	if d.Clock == nil {
 		d.Clock = func() time.Time { return time.Now().UTC() }
@@ -94,10 +122,27 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 		priceBands:   d.PriceBands,
 		wal:          d.WAL,
 		eventSeq:     d.EventSeq,
+		journalMu:    d.JournalMu,
 		clock:        d.Clock,
 		orderAccount: make(map[domain.OrderID]domain.AccountID),
 		onFault:      d.OnDurableFailure,
+		probe:        d.Probe,
 	}, nil
+}
+
+func (x *InstrumentExecutor) enterCritical() {
+	if x.probe.OnEnterCritical != nil {
+		x.probe.OnEnterCritical(x.instrument.ID)
+	}
+	if x.probe.HoldCritical != nil {
+		x.probe.HoldCritical(x.instrument.ID)
+	}
+}
+
+func (x *InstrumentExecutor) leaveCritical() {
+	if x.probe.OnLeaveCritical != nil {
+		x.probe.OnLeaveCritical(x.instrument.ID)
+	}
 }
 
 func (x *InstrumentExecutor) nextOrderID() domain.OrderID {
@@ -126,7 +171,11 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 		return SubmitOrderResult{}, err
 	}
 	x.mu.Lock()
-	defer x.mu.Unlock()
+	x.enterCritical()
+	defer func() {
+		x.leaveCritical()
+		x.mu.Unlock()
+	}()
 	if x.faulted {
 		return SubmitOrderResult{}, ErrEngineUnavailable
 	}
@@ -229,7 +278,11 @@ func (x *InstrumentExecutor) Cancel(ctx context.Context, cmd CancelOrderCommand)
 		return CancelOrderResult{}, err
 	}
 	x.mu.Lock()
-	defer x.mu.Unlock()
+	x.enterCritical()
+	defer func() {
+		x.leaveCritical()
+		x.mu.Unlock()
+	}()
 	if x.faulted {
 		return CancelOrderResult{}, ErrEngineUnavailable
 	}

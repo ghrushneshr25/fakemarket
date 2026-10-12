@@ -61,15 +61,7 @@ func (x *InstrumentExecutor) commitSubmitBatch(
 		return err
 	}
 
-	es := x.nextEventSeq()
-	batch, err := event.NewCommandBatch(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-		CorrelationID: cmd.RequestID,
-	}, "submit", steps)
-	if err != nil {
-		return err
-	}
-	if err := x.wal.Append(batch); err != nil {
+	if err := x.appendCommandBatch("submit", cmd.RequestID, ts, steps); err != nil {
 		return err
 	}
 
@@ -189,19 +181,27 @@ func (x *InstrumentExecutor) commitCancelBatch(cmd CancelOrderCommand, rem domai
 		}
 		steps = append(steps, st)
 	}
-	es := x.nextEventSeq()
-	batch, err := event.NewCommandBatch(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-		CorrelationID: cmd.RequestID,
-	}, "cancel", steps)
-	if err != nil {
-		return err
-	}
-	if err := x.wal.Append(batch); err != nil {
+	if err := x.appendCommandBatch("cancel", cmd.RequestID, ts, steps); err != nil {
 		return err
 	}
 	if _, ok := x.res.Get(cmd.OrderID); ok {
 		_ = x.res.Release(cmd.OrderID)
 	}
 	return nil
+}
+
+// appendCommandBatch assigns the next global event sequence and Appends under journalMu
+// so concurrent instruments cannot publish out-of-order sequences to the shared WAL.
+func (x *InstrumentExecutor) appendCommandBatch(kind, corr string, ts time.Time, steps []event.CommandStep) error {
+	x.journalMu.Lock()
+	defer x.journalMu.Unlock()
+	es := x.nextEventSeq()
+	batch, err := event.NewCommandBatch(event.Meta{
+		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
+		CorrelationID: corr,
+	}, kind, steps)
+	if err != nil {
+		return err
+	}
+	return x.wal.Append(batch)
 }
