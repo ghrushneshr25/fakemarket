@@ -10,12 +10,30 @@ import (
 	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
 
+// BootstrapResult is the wired trading stack for tests/simulators.
+type BootstrapResult struct {
+	Service  *Service
+	WAL      *wal.Writer
+	Read     *ReadModel
+	Accounts *AccountRegistry
+	Res      *domain.ReservationStore
+}
+
 // Bootstrap builds a ready TradingService for tests/simulators (direct Go path).
 func Bootstrap(walDir string, inst domain.Instrument, accounts map[domain.AccountID]*domain.Account) (*Service, *wal.Writer, error) {
+	res, err := BootstrapMulti(walDir, accounts, nil, inst)
+	if err != nil {
+		return nil, nil, err
+	}
+	return res.Service, res.WAL, nil
+}
+
+// BootstrapFull is Bootstrap with ReadModel for P6.2 query wiring.
+func BootstrapFull(walDir string, inst domain.Instrument, accounts map[domain.AccountID]*domain.Account) (*BootstrapResult, error) {
 	return BootstrapMulti(walDir, accounts, nil, inst)
 }
 
-// BootstrapMulti registers one executor per instrument on a shared Router/WAL/eventSeq.
+// BootstrapMulti registers one executor per instrument on a shared Router/WAL/eventSeq/Res/Accounts.
 //
 // P6.1-C1: multi-instrument concurrent Submit is supported only with disjoint
 // account mutation (see ExecutorDeps concurrency model). Shared accounts map is
@@ -25,26 +43,33 @@ func BootstrapMulti(
 	accounts map[domain.AccountID]*domain.Account,
 	probes map[domain.InstrumentID]ConcurrencyProbe,
 	instruments ...domain.Instrument,
-) (*Service, *wal.Writer, error) {
+) (*BootstrapResult, error) {
 	if len(instruments) == 0 {
-		return nil, nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
+		return nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
 	}
 	w, err := wal.Open(wal.Config{Dir: walDir, SyncOnAppend: true})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var eventSeq atomic.Uint64
+	var orderIDs atomic.Uint64
+	var orderSeq atomic.Uint64
 	var journalMu sync.Mutex
+	reg := NewAccountRegistry(accounts)
+	resStore := domain.NewReservationStore()
 	router := NewRouter()
 	svc := NewService(router)
 	onFault := func() { svc.SetReady(false) }
 	for _, inst := range instruments {
 		deps := ExecutorDeps{
 			Instrument:       inst,
-			Accounts:         accounts,
+			Accounts:         reg,
 			WAL:              w,
 			EventSeq:         &eventSeq,
 			JournalMu:        &journalMu,
+			Res:              resStore,
+			OrderIDs:         &orderIDs,
+			OrderSeq:         &orderSeq,
 			Clock:            func() time.Time { return time.Now().UTC() },
 			OnDurableFailure: onFault,
 		}
@@ -54,12 +79,20 @@ func BootstrapMulti(
 		ex, err := NewInstrumentExecutor(deps)
 		if err != nil {
 			_ = w.Close()
-			return nil, nil, err
+			return nil, err
 		}
 		router.Register(ex)
 	}
 	svc.SetReady(true)
-	return svc, w, nil
+	rm := &ReadModel{
+		Accounts: reg,
+		Res:      resStore,
+		Router:   router,
+		EventSeq: &eventSeq,
+	}
+	return &BootstrapResult{
+		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore,
+	}, nil
 }
 
 // MustInstrument builds a simple INR instrument for tests.

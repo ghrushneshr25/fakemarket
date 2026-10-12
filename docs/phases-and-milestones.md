@@ -901,8 +901,8 @@ P5.7 Crash Recovery  ✅
 
 ```text
 P6.1 Trading Service + gRPC   ✅ CLOSED (CTO accepted)
-P6.2 Query / Account Service  ⏳ NEXT
-P6.3 MD Read Model + REST     ⏳
+P6.2 Query / Account Service  ✅ implemented (CTO gate)
+P6.3 MD Read Model + REST     ⏳ NEXT
 P6.4 MD Event Contract        ⏳
 P6.5 WebSocket Streaming      ⏳
 P6.6 MD Gap Recovery          ⏳
@@ -954,18 +954,21 @@ P6.6 MD Gap Recovery          ⏳
 
 | | |
 |--|--|
-| **Status** | ⏳ NEXT |
-| **Objective** | Transport-independent read path for orders/accounts/positions (command/query separation) |
-| **Constraint** | Must not invent concurrent account mutation without an ownership model (see P6.1-C1) |
+| **Status** | ✅ implemented — pending CTO accept |
+| **Objective** | Transport-independent read-only query/account views |
+| **Code** | `internal/application/query`, `internal/transport/grpc` (QueryServer), `api/proto/.../query.proto` |
+| **ADR** | [0037](./adr/0037-query-and-account-service.md) |
 
-### Planned requirements (draft)
+### Requirements
 
 1. `QueryService` separate from `TradingService` — no gRPC/HTTP/proto in application  
-2. GetOrder / GetAccount / positions (and related views)  
-3. Views are **not** SoT — WAL remains authoritative  
-4. gRPC (or later REST) adapter only  
-5. Reconciliation path for clients after ambiguous timeouts (pairs with P6.1 Option A idempotency)  
-6. Account concurrency model stated before any multi-writer account access  
+2. GetAccount / GetOrder / ListOrders / GetPosition / ListPositions / ListTrades / ListReservations  
+3. Immutable views + `AsOfSequence`; WAL remains SoT  
+4. Account ownership isolation (no cross-account order leak)  
+5. Deterministic pagination (opaque token, max page size)  
+6. Read-only: no book/account/reservation/WAL mutation from query path  
+7. gRPC `QueryService` adapter only  
+8. `go test -race` clean with concurrent query during trading  
 
 ---
 
@@ -1066,12 +1069,12 @@ P6.6 MD Gap Recovery          ⏳
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
-| P6 APIs | 🔧 | P6.1 ✅ ACCEPTED → **P6.2 Query/Account NEXT** |
+| P6 APIs | 🔧 | P6.1 ✅ · P6.2 implemented → CTO · **P6.3 MD next** |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
-Done:   Domain → Book → Match → Risk → WAL/Recovery → TradingService+gRPC (P6.1)
-Next:   P6.2 Query / Account Service
+Done:   Domain → Book → Match → Risk → WAL → TradingService (P6.1) → QueryService (P6.2)
+Next:   P6.3 MD Read Model + REST (after P6.2 CTO accept)
 ```
 
 ---
@@ -1083,4 +1086,4 @@ Next:   P6.2 Query / Account Service
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.1 CTO ACCEPTED (Q1/Q2/Q3/C1). Next: P6.2 Query / Account Service.
+**Last updated:** 2026-10-15 — P6.2 Query/Account Service implemented (ADR 0037). Awaiting CTO accept.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ghrushneshr25/fakemarket/internal/application/query"
 	"github.com/ghrushneshr25/fakemarket/internal/application/trading"
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/matching"
@@ -24,12 +25,16 @@ func MapError(err error) error {
 		return status.Error(codes.Canceled, "canceled")
 	}
 	switch {
-	case errors.Is(err, trading.ErrInvalidCommand):
+	case errors.Is(err, trading.ErrInvalidCommand), errors.Is(err, query.ErrInvalidQuery),
+		errors.Is(err, query.ErrInvalidPageToken), errors.Is(err, query.ErrPageSizeExceeded):
 		return status.Error(codes.InvalidArgument, err.Error())
-	case errors.Is(err, trading.ErrNotReady), errors.Is(err, trading.ErrEngineUnavailable):
+	case errors.Is(err, trading.ErrNotReady), errors.Is(err, trading.ErrEngineUnavailable),
+		errors.Is(err, query.ErrNotReady):
 		return status.Error(codes.Unavailable, err.Error())
 	case errors.Is(err, trading.ErrInstrumentUnknown), errors.Is(err, trading.ErrOrderNotFound),
-		errors.Is(err, matching.ErrOrderNotFound):
+		errors.Is(err, matching.ErrOrderNotFound), errors.Is(err, query.ErrOrderNotFound),
+		errors.Is(err, query.ErrAccountNotFound), errors.Is(err, query.ErrPositionNotFound),
+		errors.Is(err, query.ErrReservationNotFound):
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, trading.ErrAccountUnknown), errors.Is(err, trading.ErrUnauthorizedAccount):
 		return status.Error(codes.PermissionDenied, err.Error())

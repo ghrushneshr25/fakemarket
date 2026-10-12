@@ -63,12 +63,13 @@ func TestC1_SameInstrumentSerialized(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	svc, w, err := BootstrapMulti(dir, multiAccounts(t), map[domain.InstrumentID]ConcurrencyProbe{
+	boot, err := BootstrapMulti(dir, multiAccounts(t), map[domain.InstrumentID]ConcurrencyProbe{
 		"AAPL": probe,
 	}, MustInstrument("AAPL"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	svc, w := boot.Service, boot.WAL
 	t.Cleanup(func() { _ = w.Close() })
 
 	px := domain.Price(100)
@@ -157,11 +158,12 @@ func TestC1_DifferentInstrumentsCriticalSectionsOverlap(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	svc, w, err := BootstrapMulti(dir, multiAccounts(t), probes,
+	boot, err := BootstrapMulti(dir, multiAccounts(t), probes,
 		MustInstrument("AAPL"), MustInstrument("TSLA"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	svc, w := boot.Service, boot.WAL
 	t.Cleanup(func() { _ = w.Close() })
 
 	px := domain.Price(50)
@@ -210,11 +212,12 @@ func TestC1_DifferentInstrumentsCriticalSectionsOverlap(t *testing.T) {
 
 func TestC1_ConcurrentMultiInstrument_DisjointAccounts_RaceClean(t *testing.T) {
 	dir := t.TempDir()
-	svc, w, err := BootstrapMulti(dir, multiAccounts(t), nil,
+	boot, err := BootstrapMulti(dir, multiAccounts(t), nil,
 		MustInstrument("AAPL"), MustInstrument("TSLA"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	svc, w := boot.Service, boot.WAL
 	t.Cleanup(func() { _ = w.Close() })
 
 	px := domain.Price(100)
@@ -292,10 +295,11 @@ func TestC1_SequentialSharedAccount_MultiInstrument_OK(t *testing.T) {
 	_ = a.AddToPosition("TSLA", 1000, 100)
 	accts := map[domain.AccountID]*domain.Account{"X": &a}
 
-	svc, w, err := BootstrapMulti(dir, accts, nil, MustInstrument("AAPL"), MustInstrument("TSLA"))
+	boot, err := BootstrapMulti(dir, accts, nil, MustInstrument("AAPL"), MustInstrument("TSLA"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	svc, w := boot.Service, boot.WAL
 	t.Cleanup(func() { _ = w.Close() })
 
 	px := domain.Price(10)

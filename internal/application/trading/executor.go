@@ -27,7 +27,7 @@ type InstrumentExecutor struct {
 
 	instrument domain.Instrument
 	engine     *matching.Engine
-	accounts   map[domain.AccountID]*domain.Account
+	accounts   *AccountRegistry
 	res        *domain.ReservationStore
 	posLimits  *domain.PositionLimitStore
 	ordLimits  *domain.OrderLimitStore
@@ -35,9 +35,9 @@ type InstrumentExecutor struct {
 
 	wal       *wal.Writer
 	eventSeq  *atomic.Uint64
-	journalMu *sync.Mutex // shared: nextEventSeq + Append must be atomic across instruments
-	orderSeq  atomic.Uint64
-	orderIDs  atomic.Uint64
+	journalMu *sync.Mutex    // shared: nextEventSeq + Append must be atomic across instruments
+	orderSeq  *atomic.Uint64 // process-global when multi-instrument (shared Res keys by OrderID)
+	orderIDs  *atomic.Uint64
 	clock     func() time.Time
 
 	orderAccount map[domain.OrderID]domain.AccountID
@@ -69,9 +69,12 @@ type ConcurrencyProbe struct {
 //     mutex — account ownership is a later milestone.
 type ExecutorDeps struct {
 	Instrument domain.Instrument
-	Accounts   map[domain.AccountID]*domain.Account
-	WAL        *wal.Writer
-	EventSeq   *atomic.Uint64
+	// Accounts is the process account registry (preferred).
+	Accounts *AccountRegistry
+	// LegacyAccounts is accepted when Accounts is nil (tests/bootstrap convenience).
+	LegacyAccounts map[domain.AccountID]*domain.Account
+	WAL            *wal.Writer
+	EventSeq       *atomic.Uint64
 	// JournalMu serializes sequence allocation + WAL.Append across executors.
 	// Matching remains under per-instrument x.mu only.
 	JournalMu  *sync.Mutex
@@ -79,7 +82,10 @@ type ExecutorDeps struct {
 	PosLimits  *domain.PositionLimitStore
 	OrdLimits  *domain.OrderLimitStore
 	PriceBands *domain.PriceBandStore
-	Clock      func() time.Time
+	// OrderIDs / OrderSeq are optional shared counters (required when Res is shared across instruments).
+	OrderIDs *atomic.Uint64
+	OrderSeq *atomic.Uint64
+	Clock    func() time.Time
 	// OnDurableFailure is called if WAL append fails after state mutation (match/reserve).
 	OnDurableFailure func()
 	Probe            ConcurrencyProbe
@@ -100,6 +106,9 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 	if d.Clock == nil {
 		d.Clock = func() time.Time { return time.Now().UTC() }
 	}
+	if d.Accounts == nil {
+		d.Accounts = NewAccountRegistry(d.LegacyAccounts)
+	}
 	if d.Res == nil {
 		d.Res = domain.NewReservationStore()
 	}
@@ -112,6 +121,12 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 	if d.PriceBands == nil {
 		d.PriceBands = domain.NewPriceBandStore()
 	}
+	if d.OrderIDs == nil {
+		d.OrderIDs = &atomic.Uint64{}
+	}
+	if d.OrderSeq == nil {
+		d.OrderSeq = &atomic.Uint64{}
+	}
 	return &InstrumentExecutor{
 		instrument:   d.Instrument,
 		engine:       eng,
@@ -123,6 +138,8 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 		wal:          d.WAL,
 		eventSeq:     d.EventSeq,
 		journalMu:    d.JournalMu,
+		orderSeq:     d.OrderSeq,
+		orderIDs:     d.OrderIDs,
 		clock:        d.Clock,
 		orderAccount: make(map[domain.OrderID]domain.AccountID),
 		onFault:      d.OnDurableFailure,
@@ -183,8 +200,8 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 		return SubmitOrderResult{}, err
 	}
 
-	acct, ok := x.accounts[cmd.AccountID]
-	if !ok {
+	acct, ok := x.accounts.Get(cmd.AccountID)
+	if !ok || acct == nil {
 		return SubmitOrderResult{}, ErrAccountUnknown
 	}
 	if cmd.InstrumentID != x.instrument.ID {
@@ -227,21 +244,27 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 		p := domain.Price(1)
 		ref = &p
 	}
-	if _, err := domain.CanAfford(*acct, x.instrument, probe, ref); err != nil {
-		return SubmitOrderResult{}, err
-	}
-	if _, err := domain.CheckPositionLimit(x.posLimits, *acct, cmd.InstrumentID, cmd.Side, cmd.Quantity); err != nil {
-		return SubmitOrderResult{}, err
-	}
-
-	// Capacity reservation (authoritative financial claim) before match.
-	if err := probe.AdvanceToAccepted(); err != nil {
-		return SubmitOrderResult{}, err
-	}
-	resv, err := x.res.Reserve(domain.ReserveRequest{
-		Order: probe, Account: *acct, Instrument: x.instrument,
-		PositionLimits: x.posLimits, RefPrice: ref,
-	})
+	// Risk reads under account RLock for a stable cash/position view.
+	var resv domain.Reservation
+	err = func() error {
+		x.accounts.mu.RLock()
+		defer x.accounts.mu.RUnlock()
+		if _, err := domain.CanAfford(*acct, x.instrument, probe, ref); err != nil {
+			return err
+		}
+		if _, err := domain.CheckPositionLimit(x.posLimits, *acct, cmd.InstrumentID, cmd.Side, cmd.Quantity); err != nil {
+			return err
+		}
+		if err := probe.AdvanceToAccepted(); err != nil {
+			return err
+		}
+		var rerr error
+		resv, rerr = x.res.Reserve(domain.ReserveRequest{
+			Order: probe, Account: *acct, Instrument: x.instrument,
+			PositionLimits: x.posLimits, RefPrice: ref,
+		})
+		return rerr
+	}()
 	if err != nil {
 		return SubmitOrderResult{}, err
 	}
@@ -330,19 +353,77 @@ func (x *InstrumentExecutor) settleTrade(tr domain.Trade) error {
 	if err != nil {
 		return err
 	}
-	buy := x.accounts[x.orderAccount[tr.BuyOrderID]]
-	sell := x.accounts[x.orderAccount[tr.SellOrderID]]
-	if buy == nil || sell == nil {
-		return fmt.Errorf("%w: trade accounts", ErrAccountUnknown)
+	buyID := x.orderAccount[tr.BuyOrderID]
+	sellID := x.orderAccount[tr.SellOrderID]
+	return x.accounts.WithWrite(func(m map[domain.AccountID]*domain.Account) error {
+		buy := m[buyID]
+		sell := m[sellID]
+		if buy == nil || sell == nil {
+			return fmt.Errorf("%w: trade accounts", ErrAccountUnknown)
+		}
+		if err := buy.Debit(notional); err != nil {
+			return err
+		}
+		if err := sell.Credit(notional); err != nil {
+			return err
+		}
+		if err := buy.AddToPosition(tr.InstrumentID, tr.Quantity, tr.Price); err != nil {
+			return err
+		}
+		return sell.ReducePosition(tr.InstrumentID, tr.Quantity)
+	})
+}
+
+func (x *InstrumentExecutor) snapshotOrder(orderID domain.OrderID, accountID domain.AccountID) (OrderSnapshot, error) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	owner, ok := x.orderAccount[orderID]
+	if !ok {
+		return OrderSnapshot{}, ErrOrderNotFound
 	}
-	if err := buy.Debit(notional); err != nil {
-		return err
+	if accountID != "" && owner != accountID {
+		return OrderSnapshot{}, ErrOrderNotFound // no existence leak
 	}
-	if err := sell.Credit(notional); err != nil {
-		return err
+	live, ok := x.engine.GetOrder(orderID)
+	if !ok {
+		return OrderSnapshot{}, ErrOrderNotFound
 	}
-	if err := buy.AddToPosition(tr.InstrumentID, tr.Quantity, tr.Price); err != nil {
-		return err
+	return orderToSnapshot(live), nil
+}
+
+func (x *InstrumentExecutor) listOrderSnapshots(accountID domain.AccountID, status domain.OrderStatus) []OrderSnapshot {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	var out []OrderSnapshot
+	for _, o := range x.engine.Orders() {
+		if o.AccountID != accountID {
+			continue
+		}
+		if status != "" && o.Status() != status {
+			continue
+		}
+		out = append(out, orderToSnapshot(o))
 	}
-	return sell.ReducePosition(tr.InstrumentID, tr.Quantity)
+	return out
+}
+
+func (x *InstrumentExecutor) listTradeSnapshots(accountID domain.AccountID) []TradeSnapshot {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	var out []TradeSnapshot
+	for _, gt := range x.engine.GeneratedTrades() {
+		tr := gt.Trade
+		buyAcct := x.orderAccount[tr.BuyOrderID]
+		sellAcct := x.orderAccount[tr.SellOrderID]
+		if buyAcct != accountID && sellAcct != accountID {
+			continue
+		}
+		out = append(out, TradeSnapshot{
+			TradeID: tr.ID, InstrumentID: tr.InstrumentID,
+			BuyOrderID: tr.BuyOrderID, SellOrderID: tr.SellOrderID,
+			BuyAccountID: buyAcct, SellAccountID: sellAcct,
+			Price: tr.Price, Quantity: tr.Quantity, Sequence: tr.Sequence,
+		})
+	}
+	return out
 }

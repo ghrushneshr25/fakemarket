@@ -49,6 +49,67 @@ func (r *Router) Submit(ctx context.Context, cmd SubmitOrderCommand) (SubmitOrde
 	return res, nil
 }
 
+func (r *Router) snapshotOrder(orderID domain.OrderID, accountID domain.AccountID) (OrderSnapshot, error) {
+	r.mu.RLock()
+	iid, ok := r.orderLoc[orderID]
+	var ex *InstrumentExecutor
+	if ok {
+		ex = r.byInst[iid]
+	}
+	r.mu.RUnlock()
+	if ex != nil {
+		return ex.snapshotOrder(orderID, accountID)
+	}
+	// Fallback scan (orderLoc miss).
+	r.mu.RLock()
+	execs := make([]*InstrumentExecutor, 0, len(r.byInst))
+	for _, e := range r.byInst {
+		execs = append(execs, e)
+	}
+	r.mu.RUnlock()
+	for _, e := range execs {
+		sn, err := e.snapshotOrder(orderID, accountID)
+		if err == nil {
+			return sn, nil
+		}
+	}
+	return OrderSnapshot{}, ErrOrderNotFound
+}
+
+func (r *Router) listOrderSnapshots(accountID domain.AccountID, instrumentID domain.InstrumentID, status domain.OrderStatus) []OrderSnapshot {
+	r.mu.RLock()
+	execs := make([]*InstrumentExecutor, 0, len(r.byInst))
+	for id, e := range r.byInst {
+		if instrumentID != "" && id != instrumentID {
+			continue
+		}
+		execs = append(execs, e)
+	}
+	r.mu.RUnlock()
+	var out []OrderSnapshot
+	for _, e := range execs {
+		out = append(out, e.listOrderSnapshots(accountID, status)...)
+	}
+	return out
+}
+
+func (r *Router) listTradeSnapshots(accountID domain.AccountID, instrumentID domain.InstrumentID) []TradeSnapshot {
+	r.mu.RLock()
+	execs := make([]*InstrumentExecutor, 0, len(r.byInst))
+	for id, e := range r.byInst {
+		if instrumentID != "" && id != instrumentID {
+			continue
+		}
+		execs = append(execs, e)
+	}
+	r.mu.RUnlock()
+	var out []TradeSnapshot
+	for _, e := range execs {
+		out = append(out, e.listTradeSnapshots(accountID)...)
+	}
+	return out
+}
+
 // Cancel routes by looking up the order's instrument.
 func (r *Router) Cancel(ctx context.Context, cmd CancelOrderCommand) (CancelOrderResult, error) {
 	r.mu.RLock()

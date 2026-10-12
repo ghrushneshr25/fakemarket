@@ -17,7 +17,8 @@ proto:
 	protoc -I api/proto \
 		--go_out=api/gen --go_opt=paths=source_relative \
 		--go-grpc_out=api/gen --go-grpc_opt=paths=source_relative \
-		api/proto/fakemarket/v1/trading.proto
+		api/proto/fakemarket/v1/trading.proto \
+		api/proto/fakemarket/v1/query.proto
 
 ## build: compile the FakeMarket binary
 build:
