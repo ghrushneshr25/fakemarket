@@ -46,7 +46,7 @@ Command carries `IdempotencyKey`. Process-local store only.
 **Clients MUST NOT auto-retry ambiguous submits across process restart** until durable reconciliation exists (P6.2+).  
 Blind retry after restart can create a second order if the first was WAL-durable but the cache is empty.
 
-### Match ↔ WAL atomicity (Option A — CommandBatch)
+### Match ↔ WAL atomicity (Option A — CommandBatch) — Q2 CLOSED
 
 ```text
 pure risk → Reserve → Match (mutates book)
@@ -56,17 +56,23 @@ pure risk → Reserve → Match (mutates book)
   → on failure: fault executor, SetReady(false)
 ```
 
-**Q2-C answer:** Individual `WAL.Append(event)` is independently durable. Therefore multi-event commands MUST NOT use multiple Appends. P6.1 uses **`CommandBatch`**: one physical WAL record containing ordered steps. Recovery applies **all steps or none** for that sequence number.
+| CTO question | Answer |
+|---|---|
+| **Q2-A** What is the atomic unit? | One physical `WAL.Append(CommandBatch)` record. Logical steps (accept/res/trade/release) live inside the batch payload. |
+| **Q2-B** Crash mid-command? | Either the batch record is absent (command not durable) or present and recovery applies **all** steps. Partial logical command cannot exist on disk. |
+| **Q2-C** Is multi-Append a transaction? | **No.** Each Append is independently durable. Multi-event commands therefore use a single Append of `CommandBatch`. |
 
-Logical step order inside batch (submit):
+Logical step order inside submit batch:
 
 ```text
-OrderAccepted → ReservationCreated → TradeExecuted* → ReservationPartiallyReleased* → (optional release)
+OrderAccepted → ReservationCreated → TradeExecuted* → ReservationPartiallyReleased* → (optional ReservationReleased)
 ```
 
 Cancel batch: `OrderCancelled` → `ReservationReleased`.
 
-If Append fails: no durable command (batch absent); in-memory may be dirty → Ready=false → restart; last durable WAL has no partial command.
+If Append fails: no durable command (batch absent); in-memory may be dirty → Ready=false → restart from last durable WAL.
+
+Tests: `TestQ2A_*`, `TestQ2B_*`, `TestQ2C_*`, `TestRecover_CommandBatch_AllOrNone`.
 
 
 ### Ordering

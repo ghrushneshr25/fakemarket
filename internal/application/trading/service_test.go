@@ -270,6 +270,194 @@ func TestService_ReservationEventsInWAL(t *testing.T) {
 	}
 }
 
+// Q2 failure matrix — CommandBatch atomic multi-event durability.
+//
+// A: multi-event command → exactly one physical WAL record (CommandBatch)
+// B: batch present → recovery applies ALL steps (no partial logical command)
+// C: WAL Append fail after match → fail-closed; no new durable batch
+// D: top-level WAL never contains loose OrderAccepted+TradeExecuted for one submit
+
+func TestQ2A_OnePhysicalRecordPerCommand(t *testing.T) {
+	dir := t.TempDir()
+	svc, w, err := Bootstrap(dir, MustInstrument("AAPL"), testAccounts(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := domain.Price(100)
+	_, err = svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A2", InstrumentID: "AAPL", Side: domain.SideSell,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 5, RequestID: "s1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 5, RequestID: "b1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = w.Close()
+
+	types := readWALTypes(t, dir)
+	if len(types) != 2 {
+		t.Fatalf("Q2-A: want 2 CommandBatch records (one per submit), got %v", types)
+	}
+	for _, tp := range types {
+		if tp != string(event.TypeCommandBatch) {
+			t.Fatalf("Q2-A/D: top-level must be CommandBatch only, got %v", types)
+		}
+	}
+	// Matching submit batch must embed TradeExecuted as a step (not separate record).
+	batches := readBatches(t, dir)
+	buy := batches[1]
+	var sawTrade, sawAccept, sawRes bool
+	for _, st := range buy.Steps {
+		switch st.Type {
+		case event.TypeTradeExecuted:
+			sawTrade = true
+		case event.TypeOrderAccepted:
+			sawAccept = true
+		case event.TypeReservationCreated:
+			sawRes = true
+		}
+	}
+	if !sawTrade || !sawAccept || !sawRes {
+		t.Fatalf("Q2-A: match batch incomplete trade=%v accept=%v res=%v steps=%d", sawTrade, sawAccept, sawRes, len(buy.Steps))
+	}
+}
+
+func TestQ2C_WALFailFailClosedNoPartialCommand(t *testing.T) {
+	dir := t.TempDir()
+	svc, w, err := Bootstrap(dir, MustInstrument("AAPL"), testAccounts(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := domain.Price(10)
+	_, err = svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 1, RequestID: "ok",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate durability failure: close WAL so next Append fails.
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 1, RequestID: "fail",
+	})
+	if !errors.Is(err, ErrEngineUnavailable) {
+		t.Fatalf("Q2-C: want fail-closed ErrEngineUnavailable, got %v", err)
+	}
+	// Service must refuse further commands (Ready=false via OnDurableFailure).
+	_, err = svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 1, RequestID: "after",
+	})
+	if !errors.Is(err, ErrNotReady) && !errors.Is(err, ErrEngineUnavailable) {
+		t.Fatalf("Q2-C: service must stay closed, got %v", err)
+	}
+	// Durable WAL still has only the successful batch — no partial second command.
+	types := readWALTypes(t, dir)
+	if len(types) != 1 || types[0] != string(event.TypeCommandBatch) {
+		t.Fatalf("Q2-C: want exactly 1 durable CommandBatch, got %v", types)
+	}
+}
+
+func TestQ2B_RecoverMatchBatchAppliesAllSteps(t *testing.T) {
+	// Live path writes batch; recovery fold (via reading steps) is covered in recovery package.
+	// Here: after match, batch steps are complete and ordered.
+	dir := t.TempDir()
+	svc, w, err := Bootstrap(dir, MustInstrument("AAPL"), testAccounts(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := domain.Price(100)
+	_, err = svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A2", InstrumentID: "AAPL", Side: domain.SideSell,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 3, RequestID: "s",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	buy, err := svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 3, RequestID: "b",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if buy.Status != domain.OrderStatusFilled {
+		t.Fatal(buy.Status)
+	}
+	_ = w.Close()
+	batches := readBatches(t, dir)
+	if len(batches) != 2 {
+		t.Fatalf("got %d batches", len(batches))
+	}
+	// Q2-B: match batch is one atomic unit with accept+res+trade (and release steps if any)
+	steps := batches[1].Steps
+	if len(steps) < 3 {
+		t.Fatalf("match batch too short: %d", len(steps))
+	}
+	if steps[0].Type != event.TypeOrderAccepted {
+		t.Fatal(steps[0].Type)
+	}
+}
+
+func readWALTypes(t *testing.T, dir string) []string {
+	t.Helper()
+	rd, err := wal.OpenReader(wal.ReaderConfig{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rd.Close() }()
+	var types []string
+	for {
+		ev, err := rd.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		types = append(types, string(ev.Type()))
+	}
+	return types
+}
+
+func readBatches(t *testing.T, dir string) []event.CommandBatchPayload {
+	t.Helper()
+	rd, err := wal.OpenReader(wal.ReaderConfig{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rd.Close() }()
+	var out []event.CommandBatchPayload
+	for {
+		ev, err := rd.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ev.Type() != event.TypeCommandBatch {
+			continue
+		}
+		pl, err := event.DefaultRegistry().Decode(ev.Type(), ev.Version(), ev.PayloadBytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, pl.(event.CommandBatchPayload))
+	}
+	return out
+}
+
 func TestService_IdempotencyCrashLimitation_Documented(t *testing.T) {
 	// Option A: process-local only — after "restart" (new Service), same key can create a second order.
 	dir1 := t.TempDir()

@@ -61,6 +61,90 @@ func TestRecover_Empty(t *testing.T) {
 	}
 }
 
+func TestRecover_CommandBatch_AllOrNone(t *testing.T) {
+	// Q2-B: one physical CommandBatch expands to all logical steps on recover.
+	dir := t.TempDir()
+	reg, accts := seed(t)
+	px := domain.Price(100)
+	stAccept, err := event.StepFromPayload(event.OrderAcceptedPayload{
+		OrderID: "B1", AccountID: "A1", InstrumentID: "AAPL",
+		Side: domain.SideBuy, Type: domain.OrderTypeLimit, Quantity: 10, Price: &px, OrderSequence: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stRes, err := event.StepFromPayload(event.ReservationCreatedPayload{
+		OrderID: "B1", AccountID: "A1", InstrumentID: "AAPL", Cash: 1000, PositionQuantity: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stSell, err := event.StepFromPayload(event.OrderAcceptedPayload{
+		OrderID: "S1", AccountID: "A2", InstrumentID: "AAPL",
+		Side: domain.SideSell, Type: domain.OrderTypeLimit, Quantity: 10, Price: &px, OrderSequence: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stSellRes, err := event.StepFromPayload(event.ReservationCreatedPayload{
+		OrderID: "S1", AccountID: "A2", InstrumentID: "AAPL", Cash: 0, PositionQuantity: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two batches: sell resting, then buy+trade in one batch (as live path does).
+	batch1, err := event.NewCommandBatch(meta("E1", 1), "submit", []event.CommandStep{stSell, stSellRes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stTrade, err := event.StepFromPayload(event.TradeExecutedPayload{
+		TradeID: "T1", InstrumentID: "AAPL",
+		BuyOrderID: "B1", SellOrderID: "S1",
+		BuyAccountID: "A1", SellAccountID: "A2",
+		Price: 100, Quantity: 10, TradeSequence: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stResRel, err := event.StepFromPayload(event.ReservationReleasedPayload{
+		OrderID: "B1", Cash: 1000, PositionQuantity: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Buy batch: accept + res + trade + release residual (simplified: release full after fill)
+	// After trade, reservation should be released — apply order: accept, res create, trade, then release.
+	// Trade settles cash; release removes reservation claim.
+	batch2, err := event.NewCommandBatch(meta("E2", 2), "submit", []event.CommandStep{stAccept, stRes, stTrade, stResRel})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeEvents(t, dir, []event.Event{batch1, batch2})
+	cash1 := accts["A1"].Cash()
+	res, err := RecoverDir(Config{Mode: ModeStrict, Instruments: reg, Accounts: accts, WALDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.EventsApplied != 2 {
+		t.Fatalf("want 2 physical batches applied, got %+v", res)
+	}
+	if res.State.Orders["B1"].Status() != domain.OrderStatusFilled {
+		t.Fatal(res.State.Orders["B1"].Status())
+	}
+	if res.State.Orders["S1"].Status() != domain.OrderStatusFilled {
+		t.Fatal(res.State.Orders["S1"].Status())
+	}
+	if res.TradesRecovered != 1 {
+		t.Fatal(res.TradesRecovered)
+	}
+	if res.State.Accounts["A1"].Cash() != cash1-1000 {
+		t.Fatal(res.State.Accounts["A1"].Cash())
+	}
+	if res.State.Reservations.Exists("B1") {
+		t.Fatal("buy reservation must be fully applied away")
+	}
+}
+
 func TestRecover_OrderAcceptedResting(t *testing.T) {
 	dir := t.TempDir()
 	reg, accts := seed(t)

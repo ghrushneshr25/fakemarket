@@ -14,14 +14,14 @@ import (
 
 // InstrumentExecutor is the single-writer execution context for one instrument.
 //
-// Atomicity boundary (P6.1 CTO clarification):
+// Atomicity boundary (P6.1 Q2 — CommandBatch):
 //
 //	Risk checks are pure (no mutation).
-//	Then under lock: Reserve → Match (mutates book) → journal all events to WAL.
-//	If any WAL.Append fails after match/reserve mutation, OnDurableFailure is invoked
-//	and the executor is marked faulted — no further commands until process restart
-//	and recovery from last durable WAL. There is no in-memory rollback of the book;
-//	fail-closed + restart is the P6.1 contract (full transactional match-outbox is later).
+//	Then under lock: Reserve → Match (mutates book) → ONE WAL.Append(CommandBatch).
+//	CommandBatch embeds ordered logical steps; recovery applies all or none.
+//	If Append fails after match/reserve mutation, OnDurableFailure is invoked
+//	and the executor is marked faulted — Ready=false until process restart.
+//	No in-memory book rollback; last durable WAL has no partial multi-event command.
 type InstrumentExecutor struct {
 	mu sync.Mutex
 

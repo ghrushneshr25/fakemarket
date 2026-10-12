@@ -914,7 +914,7 @@ P6.6 MD Gap Recovery          ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (Q1 Option A idempotency; Q2 CommandBatch atomicity; Q3 reservations) |
 | **Objective** | Transport-independent commands + gRPC adapter |
 | **Code** | `internal/application/trading`, `internal/transport/grpc`, `api/proto` |
 | **ADR** | [0036](./adr/0036-trading-service-and-grpc.md) |
@@ -925,9 +925,10 @@ P6.6 MD Gap Recovery          ⏳
 2. Command router → per-instrument single-writer executor  
 3. gRPC `fakemarket.v1` adapter maps proto ↔ commands  
 4. Integer price ticks; error mapping; context deadlines  
-5. Process-local idempotency (not durable)  
+5. Process-local idempotency (not durable) — clients must not blind-retry across restart  
 6. Simulator path = direct Go service call  
-7. No query/MD endpoints  
+7. Multi-event command durability via **CommandBatch** (one WAL record; recovery all-or-none)  
+8. No query/MD endpoints  
 
 ---
 
