@@ -1086,4 +1086,4 @@ Next:   P6.3 MD Read Model + REST (after P6.2 CTO accept)
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.2 Query/Account Service implemented (ADR 0037). Awaiting CTO accept.
+**Last updated:** 2026-10-15 — P6.2 implemented (`2fe71fe`); CTO review package in `docs/reviews/p6.2-cto-review-package.md`. Interview Q1–Q60 in `.help/interview.md`.
