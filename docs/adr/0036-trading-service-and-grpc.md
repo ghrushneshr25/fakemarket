@@ -1,6 +1,6 @@
 # ADR 0036 — Trading Service + gRPC (P6.1)
 
-**Status:** Accepted  
+**Status:** Accepted (CTO — Q1/Q2/Q3/C1 closed)  
 **Date:** 2026-10-15  
 **Phase:** P6 — APIs & Market Data  
 **Milestone:** P6.1

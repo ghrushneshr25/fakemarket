@@ -895,13 +895,13 @@ P5.7 Crash Recovery  ✅
 | P6.6 | Authn/authz, rate limits, payload limits, timeouts, idempotency |
 | P6.7 | Matching engine independent of HTTP |
 
-### Phase status: 🔧 In progress (P6.1)
+### Phase status: 🔧 In progress (next: P6.2)
 
 ### Roadmap
 
 ```text
-P6.1 Trading Service + gRPC   ✅
-P6.2 Query / Account Service  ⏳
+P6.1 Trading Service + gRPC   ✅ CLOSED (CTO accepted)
+P6.2 Query / Account Service  ⏳ NEXT
 P6.3 MD Read Model + REST     ⏳
 P6.4 MD Event Contract        ⏳
 P6.5 WebSocket Streaming      ⏳
@@ -914,10 +914,11 @@ P6.6 MD Gap Recovery          ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ CLOSED (Q1 idempotency; Q2 CommandBatch; Q3 reservations; C1 multi-instrument concurrency boundary) |
+| **Status** | 🟢 **ACCEPTED** (2026-10-15) |
 | **Objective** | Transport-independent commands + gRPC adapter |
 | **Code** | `internal/application/trading`, `internal/transport/grpc`, `api/proto` |
 | **ADR** | [0036](./adr/0036-trading-service-and-grpc.md) |
+| **Commits** | `98efd42` · `0b776dd` · `a7be287` · `8b0f026` |
 
 ### Requirements
 
@@ -928,7 +929,43 @@ P6.6 MD Gap Recovery          ⏳
 5. Process-local idempotency (not durable) — clients must not blind-retry across restart  
 6. Simulator path = direct Go service call  
 7. Multi-event command durability via **CommandBatch** (one WAL record; recovery all-or-none)  
-8. No query/MD endpoints  
+8. Per-instrument concurrency lanes; no global account mutex; shared-account concurrent mutation **unsupported**  
+9. No query/MD endpoints (P6.2+)  
+
+### CTO gates closed
+
+| Gate | Outcome |
+|------|---------|
+| Q1 Idempotency | Option A — process-local; crash-window documented |
+| Q2 Match↔WAL atomicity | Option A — `CommandBatch`; Q2-A/B/C + failure-matrix tests |
+| Q3 Reservations | Journaled as batch steps |
+| C1 Multi-instrument concurrency | Same-instrument serialized; cross-instrument CS overlap proven; `-race` clean for disjoint accounts; `journalMu` for seq+Append |
+
+### Explicit deferred scope
+
+- Durable idempotency / client exactly-once across restart  
+- Concurrent multi-instrument mutation of the **same Account** (account ownership protocol later)  
+- Query/GetOrder/GetAccount (P6.2)  
+- Market data (P6.3+)  
+
+---
+
+## P6.2 — Query / Account Service
+
+| | |
+|--|--|
+| **Status** | ⏳ NEXT |
+| **Objective** | Transport-independent read path for orders/accounts/positions (command/query separation) |
+| **Constraint** | Must not invent concurrent account mutation without an ownership model (see P6.1-C1) |
+
+### Planned requirements (draft)
+
+1. `QueryService` separate from `TradingService` — no gRPC/HTTP/proto in application  
+2. GetOrder / GetAccount / positions (and related views)  
+3. Views are **not** SoT — WAL remains authoritative  
+4. gRPC (or later REST) adapter only  
+5. Reconciliation path for clients after ambiguous timeouts (pairs with P6.1 Option A idempotency)  
+6. Account concurrency model stated before any multi-writer account access  
 
 ---
 
@@ -1029,12 +1066,11 @@ P6.6 MD Gap Recovery          ⏳
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
-| P6 APIs | 🔧 | P6.1 Trading Service + gRPC |
-| P6 APIs | ⏳ | After core engine stable |
+| P6 APIs | 🔧 | P6.1 ✅ ACCEPTED → **P6.2 Query/Account NEXT** |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
-Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
+Done:   Domain → Book → Match → Risk → WAL/Recovery → TradingService+gRPC (P6.1)
 Next:   P6.2 Query / Account Service
 ```
 
@@ -1047,4 +1083,4 @@ Next:   P6.2 Query / Account Service
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.7 CLOSED (CTO accepted). Phase 5 complete. Next: P6.
+**Last updated:** 2026-10-15 — P6.1 CTO ACCEPTED (Q1/Q2/Q3/C1). Next: P6.2 Query / Account Service.
