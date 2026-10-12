@@ -866,10 +866,11 @@ P5.7 Crash Recovery  ✅
 
 | | |
 |--|--|
-| **Status** | ✅ |
+| **Status** | ✅ CLOSED (CTO accepted) |
 | **Objective** | Restart: recover → validate → resume writer safely |
 | **Code** | `wal.OpenResumed`, `recovery.StartupRecover` / `ResumeWriter` |
 | **ADR** | [0035](./adr/0035-crash-recovery.md) |
+| **Commits** | `d9802ce` crash recovery · `4f213c4` Ready after resume |
 
 ### Requirements
 
@@ -994,7 +995,7 @@ P5.7 Crash Recovery  ✅
 | P2 Order Book | ✅ | — |
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
-| P5 WAL | ✅ | P5.1–P5.7 complete |
+| P5 WAL | ✅ | P5.1–P5.7 CLOSED |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
@@ -1012,4 +1013,4 @@ Next:   P6 APIs & Market Data
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-09-30 — P5.7 Crash Recovery complete; Phase 5 closed.
+**Last updated:** 2026-09-30 — P5.7 CLOSED (CTO accepted). Phase 5 complete. Next: P6.
