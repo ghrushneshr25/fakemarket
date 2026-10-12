@@ -20,14 +20,21 @@ Complete CRC-valid bytes may still exist on disk after Sync failure (caller saw 
 
 **Not claimed:** power-loss durability beyond OS/`fsync` semantics.
 
-## Restart
+## Restart / readiness (Gate G)
 
-1. `StartupRecover` (default **Strict**; RecoverTail only if configured)  
-2. `validateFinal`  
-3. `Ready=true` only on full success  
-4. `ResumeWriter` / `wal.OpenResumed` verifies **disk last sequence == recovery LastSequence**  
-5. Next Append = LastSequence+1  
-6. `SeenEventIDs` = all EventIDs observed during WAL fold (not merely live object IDs)
+```text
+1. StartupRecover  → RecoveryComplete (state OK); Ready=false
+2. ResumeWriter / OpenResumed → disk seq verified; Ready=true + Writer
+3. Only then: matching / commands
+```
+
+Or `CompleteStartup` = both steps; Ready only if writer resume succeeds.
+
+Failed ResumeWriter leaves **Ready=false** — must not accept commands.
+
+- Default Mode: **Strict** (RecoverTail explicit only)  
+- `SeenEventIDs` = all EventIDs from WAL fold history  
+- Next Append = LastSequence+1  
 
 ## Crash matrix
 
