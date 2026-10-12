@@ -242,6 +242,36 @@ func (p ReservationPartiallyReleasedPayload) Validate() error {
 	return nil
 }
 
+// CommandStep is one logical authoritative fact inside a CommandBatch.
+type CommandStep struct {
+	Type    Type            `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// CommandBatchPayload is one durable WAL record for a multi-event command result.
+// Recovery applies steps in order; the batch is all-or-nothing at the WAL record level.
+type CommandBatchPayload struct {
+	CommandKind string        `json:"command_kind"` // submit|cancel
+	Steps       []CommandStep `json:"steps"`
+}
+
+func (p CommandBatchPayload) EventType() Type              { return TypeCommandBatch }
+func (p CommandBatchPayload) SchemaVersion() SchemaVersion { return V1 }
+func (p CommandBatchPayload) Validate() error {
+	if len(p.Steps) == 0 {
+		return fmt.Errorf("%w: empty command batch", ErrInvalidPayload)
+	}
+	for i, st := range p.Steps {
+		if st.Type == "" || len(st.Payload) == 0 {
+			return fmt.Errorf("%w: step %d incomplete", ErrInvalidPayload, i)
+		}
+		if st.Type == TypeCommandBatch {
+			return fmt.Errorf("%w: nested batch forbidden", ErrInvalidPayload)
+		}
+	}
+	return nil
+}
+
 // MarshalPayload encodes payload deterministically (struct field order).
 func MarshalPayload(p Payload) ([]byte, error) {
 	if p == nil {

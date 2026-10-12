@@ -65,7 +65,8 @@ func IsKnownType(t Type) bool {
 	switch t {
 	case TypeOrderAccepted, TypeOrderRejected, TypeOrderCancelled, TypeOrderExpired,
 		TypeTradeExecuted,
-		TypeReservationCreated, TypeReservationReleased, TypeReservationPartiallyReleased:
+		TypeReservationCreated, TypeReservationReleased, TypeReservationPartiallyReleased,
+		TypeCommandBatch:
 		return true
 	default:
 		return false
@@ -88,6 +89,7 @@ func DefaultRegistry() *Registry {
 	must(TypeReservationCreated, decodeAs[ReservationCreatedPayload])
 	must(TypeReservationReleased, decodeAs[ReservationReleasedPayload])
 	must(TypeReservationPartiallyReleased, decodeAs[ReservationPartiallyReleasedPayload])
+	must(TypeCommandBatch, decodeAs[CommandBatchPayload])
 	return r
 }
 

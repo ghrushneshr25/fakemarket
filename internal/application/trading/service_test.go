@@ -225,21 +225,48 @@ func TestService_ReservationEventsInWAL(t *testing.T) {
 		}
 		types = append(types, string(ev.Type()))
 	}
-	need := []event.Type{
-		event.TypeOrderAccepted, event.TypeReservationCreated,
-		event.TypeOrderCancelled, event.TypeReservationReleased,
+	// P6.1 atomicity: one CommandBatch per command (not loose multi-record)
+	if len(types) < 1 || types[0] != string(event.TypeCommandBatch) {
+		t.Fatalf("want CommandBatch records, got %v", types)
 	}
-	for _, n := range need {
-		found := false
-		for _, tpe := range types {
-			if tpe == string(n) {
-				found = true
-				break
+	// Decode batch and ensure reservation steps present
+	rd2, err := wal.OpenReader(wal.ReaderConfig{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rd2.Close() })
+	var sawAccept, sawResCreate, sawCancel, sawResRel bool
+	for {
+		ev, err := rd2.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ev.Type() != event.TypeCommandBatch {
+			continue
+		}
+		pl, err := event.DefaultRegistry().Decode(ev.Type(), ev.Version(), ev.PayloadBytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		batch := pl.(event.CommandBatchPayload)
+		for _, st := range batch.Steps {
+			switch st.Type {
+			case event.TypeOrderAccepted:
+				sawAccept = true
+			case event.TypeReservationCreated:
+				sawResCreate = true
+			case event.TypeOrderCancelled:
+				sawCancel = true
+			case event.TypeReservationReleased:
+				sawResRel = true
 			}
 		}
-		if !found {
-			t.Fatalf("missing %s in %v", n, types)
-		}
+	}
+	if !sawAccept || !sawResCreate || !sawCancel || !sawResRel {
+		t.Fatalf("batch steps incomplete accept=%v resC=%v cancel=%v resR=%v", sawAccept, sawResCreate, sawCancel, sawResRel)
 	}
 }
 

@@ -160,3 +160,28 @@ func NewReservationPartiallyReleased(m Meta, p ReservationPartiallyReleasedPaylo
 		Payload: p,
 	})
 }
+
+// NewCommandBatch builds one authoritative WAL event wrapping ordered logical steps.
+// One Append = all-or-nothing durability for the multi-event command result.
+func NewCommandBatch(m Meta, kind string, steps []CommandStep) (Event, error) {
+	if err := m.validate(); err != nil {
+		return Event{}, err
+	}
+	p := CommandBatchPayload{CommandKind: kind, Steps: steps}
+	return New(Params{
+		ID: m.ID, Type: TypeCommandBatch, Version: V1, Class: ClassAuthoritative,
+		Sequence: m.Sequence, Timestamp: m.Timestamp,
+		CorrelationID: m.CorrelationID, CausationID: m.CausationID,
+		AggregateType: AggregateOrder, AggregateID: kind,
+		Payload: p,
+	})
+}
+
+// StepFromPayload validates and marshals a typed payload into a CommandStep.
+func StepFromPayload(p Payload) (CommandStep, error) {
+	raw, err := MarshalPayload(p)
+	if err != nil {
+		return CommandStep{}, err
+	}
+	return CommandStep{Type: p.EventType(), Payload: raw}, nil
+}

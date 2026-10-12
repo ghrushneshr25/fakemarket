@@ -289,6 +289,46 @@ func TestWireUnknownFieldRejected(t *testing.T) {
 	}
 }
 
+func TestCommandBatch_RoundTrip(t *testing.T) {
+	st1, err := StepFromPayload(OrderAcceptedPayload{
+		OrderID: "O1", AccountID: "A1", InstrumentID: "AAPL",
+		Side: domain.SideBuy, Type: domain.OrderTypeLimit, Quantity: 1,
+		Price: func() *domain.Price { p := domain.Price(10); return &p }(), OrderSequence: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st2, err := StepFromPayload(ReservationCreatedPayload{
+		OrderID: "O1", AccountID: "A1", InstrumentID: "AAPL", Cash: 10, PositionQuantity: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := NewCommandBatch(Meta{ID: "EVT-B", Sequence: 1, Timestamp: ts()}, "submit", []CommandStep{st1, st2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := Encode(ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Decode(raw, DefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Type() != TypeCommandBatch {
+		t.Fatal(got.Type())
+	}
+	pl, err := DefaultRegistry().Decode(got.Type(), got.Version(), got.PayloadBytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := pl.(CommandBatchPayload)
+	if len(batch.Steps) != 2 {
+		t.Fatal(batch.Steps)
+	}
+}
+
 func TestIDsDistinctConcepts(t *testing.T) {
 	// EventID ≠ TradeID ≠ Sequence numerically/string-wise as concepts
 	p := TradeExecutedPayload{

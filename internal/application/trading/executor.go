@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
-	"github.com/ghrushneshr25/fakemarket/internal/event"
 	"github.com/ghrushneshr25/fakemarket/internal/matching"
 	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
@@ -213,18 +212,8 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 	x.orderAccount[oid] = cmd.AccountID
 
 	ts := x.clock()
-	// Authoritative event order for recovery fold:
-	// OrderAccepted → ReservationCreated → TradeExecuted* → reservation releases
-	if err := x.journalAccepted(cmd, oid, oseq, ts); err != nil {
-		return SubmitOrderResult{}, x.durableFail(err)
-	}
-	if err := x.journalReservationCreated(resv, cmd.RequestID, ts); err != nil {
-		return SubmitOrderResult{}, x.durableFail(err)
-	}
-	if err := x.journalNewTrades(cmd.RequestID, ts); err != nil {
-		return SubmitOrderResult{}, x.durableFail(err)
-	}
-	if err := x.reconcileReservationAfterSubmit(oid, live, cmd.RequestID, ts); err != nil {
+	// One WAL record (CommandBatch) = all-or-nothing durability for the command.
+	if err := x.commitSubmitBatch(cmd, oid, oseq, resv, live, ts); err != nil {
 		return SubmitOrderResult{}, x.durableFail(err)
 	}
 
@@ -269,20 +258,7 @@ func (x *InstrumentExecutor) Cancel(ctx context.Context, cmd CancelOrderCommand)
 	}
 
 	ts := x.clock()
-	es := x.nextEventSeq()
-	ev, err := event.NewOrderCancelled(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-		CorrelationID: cmd.RequestID,
-	}, event.OrderCancelledPayload{
-		OrderID: cmd.OrderID, RemainingQuantity: rem, Reason: "user cancel",
-	})
-	if err != nil {
-		return CancelOrderResult{}, x.durableFail(err)
-	}
-	if err := x.wal.Append(ev); err != nil {
-		return CancelOrderResult{}, x.durableFail(err)
-	}
-	if err := x.releaseReservationFully(cmd.OrderID, cmd.RequestID, ts); err != nil {
+	if err := x.commitCancelBatch(cmd, rem, ts); err != nil {
 		return CancelOrderResult{}, x.durableFail(err)
 	}
 
@@ -290,147 +266,6 @@ func (x *InstrumentExecutor) Cancel(ctx context.Context, cmd CancelOrderCommand)
 		OrderID: cmd.OrderID, Status: live.Status(),
 		RemainingQuantity: live.RemainingQuantity(), RequestID: cmd.RequestID,
 	}, nil
-}
-
-func (x *InstrumentExecutor) journalAccepted(cmd SubmitOrderCommand, oid domain.OrderID, oseq domain.Sequence, ts time.Time) error {
-	es := x.nextEventSeq()
-	ev, err := event.NewOrderAccepted(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-		CorrelationID: cmd.RequestID,
-	}, event.OrderAcceptedPayload{
-		OrderID: oid, AccountID: cmd.AccountID, InstrumentID: cmd.InstrumentID,
-		Side: cmd.Side, Type: cmd.Type, Quantity: cmd.Quantity, Price: cmd.Price, OrderSequence: oseq,
-	})
-	if err != nil {
-		return err
-	}
-	return x.wal.Append(ev)
-}
-
-func (x *InstrumentExecutor) journalReservationCreated(r domain.Reservation, corr string, ts time.Time) error {
-	if r.Cash == 0 && r.PositionQuantity == 0 && r.OrderID == "" {
-		return nil
-	}
-	es := x.nextEventSeq()
-	ev, err := event.NewReservationCreated(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-		CorrelationID: corr,
-	}, event.ReservationCreatedPayload{
-		OrderID: r.OrderID, AccountID: r.AccountID, InstrumentID: r.InstrumentID,
-		Cash: r.Cash, PositionQuantity: r.PositionQuantity,
-	})
-	if err != nil {
-		return err
-	}
-	return x.wal.Append(ev)
-}
-
-func (x *InstrumentExecutor) journalNewTrades(corr string, ts time.Time) error {
-	trades := x.engine.GeneratedTrades()
-	for i := x.tradeCursor; i < len(trades); i++ {
-		tr := trades[i].Trade
-		buyAcct := x.orderAccount[tr.BuyOrderID]
-		sellAcct := x.orderAccount[tr.SellOrderID]
-		es := x.nextEventSeq()
-		ev, err := event.NewTradeExecuted(event.Meta{
-			ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-			CorrelationID: corr,
-		}, event.TradeExecutedPayload{
-			TradeID: tr.ID, InstrumentID: tr.InstrumentID,
-			BuyOrderID: tr.BuyOrderID, SellOrderID: tr.SellOrderID,
-			BuyAccountID: buyAcct, SellAccountID: sellAcct,
-			Price: tr.Price, Quantity: tr.Quantity, TradeSequence: tr.Sequence,
-		})
-		if err != nil {
-			return err
-		}
-		if err := x.wal.Append(ev); err != nil {
-			return err
-		}
-		if err := x.settleTrade(tr); err != nil {
-			return err
-		}
-		// Partial release reservation for buy side fill
-		if err := x.partialReleaseForFill(tr.BuyOrderID, tr, corr, ts); err != nil {
-			return err
-		}
-	}
-	x.tradeCursor = len(trades)
-	return nil
-}
-
-func (x *InstrumentExecutor) partialReleaseForFill(buyOID domain.OrderID, tr domain.Trade, corr string, ts time.Time) error {
-	r, ok := x.res.Get(buyOID)
-	if !ok || (r.Cash == 0 && r.PositionQuantity == 0) {
-		return nil
-	}
-	unit, err := x.instrument.MoneyFromPrice(tr.Price)
-	if err != nil {
-		return err
-	}
-	cashPart, err := domain.CheckedMulMoneyQty(unit, tr.Quantity)
-	if err != nil {
-		return err
-	}
-	if cashPart > r.Cash {
-		cashPart = r.Cash
-	}
-	posPart := tr.Quantity
-	if posPart > r.PositionQuantity {
-		posPart = r.PositionQuantity
-	}
-	if cashPart == 0 && posPart == 0 {
-		return nil
-	}
-	if err := x.res.ReleasePartial(buyOID, cashPart, posPart); err != nil {
-		return err
-	}
-	var remCash domain.Money
-	var remPos domain.Quantity
-	if r2, ok := x.res.Get(buyOID); ok {
-		remCash, remPos = r2.Cash, r2.PositionQuantity
-	}
-	es := x.nextEventSeq()
-	ev, err := event.NewReservationPartiallyReleased(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-		CorrelationID: corr,
-	}, event.ReservationPartiallyReleasedPayload{
-		OrderID: buyOID, CashReleased: cashPart, PositionQtyReleased: posPart,
-		CashRemaining: remCash, PositionQtyRemaining: remPos,
-	})
-	if err != nil {
-		return err
-	}
-	return x.wal.Append(ev)
-}
-
-func (x *InstrumentExecutor) reconcileReservationAfterSubmit(oid domain.OrderID, live *domain.Order, corr string, ts time.Time) error {
-	if live.RemainingQuantity() > 0 {
-		return nil // still reserved for remainder
-	}
-	return x.releaseReservationFully(oid, corr, ts)
-}
-
-func (x *InstrumentExecutor) releaseReservationFully(oid domain.OrderID, corr string, ts time.Time) error {
-	r, ok := x.res.Get(oid)
-	if !ok {
-		return nil
-	}
-	cash, pos := r.Cash, r.PositionQuantity
-	if err := x.res.Release(oid); err != nil {
-		return err
-	}
-	es := x.nextEventSeq()
-	ev, err := event.NewReservationReleased(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
-		CorrelationID: corr,
-	}, event.ReservationReleasedPayload{
-		OrderID: oid, Cash: cash, PositionQuantity: pos,
-	})
-	if err != nil {
-		return err
-	}
-	return x.wal.Append(ev)
 }
 
 func (x *InstrumentExecutor) settleTrade(tr domain.Trade) error {

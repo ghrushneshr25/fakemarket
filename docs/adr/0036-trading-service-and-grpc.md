@@ -46,23 +46,28 @@ Command carries `IdempotencyKey`. Process-local store only.
 **Clients MUST NOT auto-retry ambiguous submits across process restart** until durable reconciliation exists (P6.2+).  
 Blind retry after restart can create a second order if the first was WAL-durable but the cache is empty.
 
-### Match ↔ WAL atomicity (P6.1 fail-closed)
+### Match ↔ WAL atomicity (Option A — CommandBatch)
 
 ```text
-pure risk → Reserve → Match (mutates book) → journal events to WAL
+pure risk → Reserve → Match (mutates book)
+  → build ordered logical steps in memory
+  → ONE WAL.Append(CommandBatch)  // single durable record
+  → on success: local settle / release store
+  → on failure: fault executor, SetReady(false)
 ```
 
-If `WAL.Append` fails after match/reserve mutation: executor faulted, `TradingService.SetReady(false)`, no further commands.  
-**No in-memory book rollback** in P6.1 — operator restarts; recover from last durable WAL.  
-Full transactional outbox (journal-then-apply) is a future hardening.
+**Q2-C answer:** Individual `WAL.Append(event)` is independently durable. Therefore multi-event commands MUST NOT use multiple Appends. P6.1 uses **`CommandBatch`**: one physical WAL record containing ordered steps. Recovery applies **all steps or none** for that sequence number.
 
-Event order journaled on submit:
+Logical step order inside batch (submit):
 
 ```text
-OrderAccepted → ReservationCreated → TradeExecuted* → ReservationPartiallyReleased* → ReservationReleased (if fully filled)
+OrderAccepted → ReservationCreated → TradeExecuted* → ReservationPartiallyReleased* → (optional release)
 ```
 
-Cancel: `OrderCancelled` → `ReservationReleased`.
+Cancel batch: `OrderCancelled` → `ReservationReleased`.
+
+If Append fails: no durable command (batch absent); in-memory may be dirty → Ready=false → restart; last durable WAL has no partial command.
+
 
 ### Ordering
 

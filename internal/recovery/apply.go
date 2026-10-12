@@ -34,6 +34,8 @@ func (s *State) apply(ev event.Event) error {
 	}
 
 	switch p := pl.(type) {
+	case event.CommandBatchPayload:
+		err = s.applyCommandBatch(p, ev.Timestamp())
 	case event.OrderAcceptedPayload:
 		err = s.applyOrderAccepted(p)
 	case event.OrderCancelledPayload:
@@ -58,6 +60,38 @@ func (s *State) apply(ev event.Event) error {
 	s.seenEventIDs[id] = struct{}{}
 	s.LastEventSequence = seq
 	s.EventsApplied++
+	return nil
+}
+
+func (s *State) applyCommandBatch(p event.CommandBatchPayload, ts time.Time) error {
+	reg := event.DefaultRegistry()
+	for i, st := range p.Steps {
+		pl, err := reg.Decode(st.Type, event.V1, st.Payload)
+		if err != nil {
+			return fmt.Errorf("batch step %d: %w", i, err)
+		}
+		switch sp := pl.(type) {
+		case event.OrderAcceptedPayload:
+			err = s.applyOrderAccepted(sp)
+		case event.OrderCancelledPayload:
+			err = s.applyOrderCancelled(sp)
+		case event.OrderExpiredPayload:
+			err = s.applyOrderExpired(sp)
+		case event.TradeExecutedPayload:
+			err = s.applyTradeExecuted(sp, ts)
+		case event.ReservationCreatedPayload:
+			err = s.applyReservationCreated(sp)
+		case event.ReservationReleasedPayload:
+			err = s.applyReservationReleased(sp)
+		case event.ReservationPartiallyReleasedPayload:
+			err = s.applyReservationPartial(sp)
+		default:
+			err = fmt.Errorf("unhandled batch step type %s", st.Type)
+		}
+		if err != nil {
+			return fmt.Errorf("batch step %d (%s): %w", i, st.Type, err)
+		}
+	}
 	return nil
 }
 
