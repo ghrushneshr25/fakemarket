@@ -3,10 +3,14 @@ package trading
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"path/filepath"
 	"testing"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
+	"github.com/ghrushneshr25/fakemarket/internal/event"
+	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
 
 func testAccounts(t *testing.T) map[domain.AccountID]*domain.Account {
@@ -177,9 +181,100 @@ func TestService_WALWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = w.Close()
-	// segment exists
 	ents, _ := filepath.Glob(filepath.Join(dir, "segment-*.wal"))
 	if len(ents) < 1 {
 		t.Fatal("no wal")
 	}
+}
+
+func TestService_ReservationEventsInWAL(t *testing.T) {
+	dir := t.TempDir()
+	svc, w, err := Bootstrap(dir, MustInstrument("AAPL"), testAccounts(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := domain.Price(100)
+	sub, err := svc.Submit(context.Background(), SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Cancel(context.Background(), CancelOrderCommand{
+		AccountID: "A1", OrderID: sub.OrderID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = w.Close()
+
+	rd, err := wal.OpenReader(wal.ReaderConfig{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rd.Close() })
+	var types []string
+	for {
+		ev, err := rd.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		types = append(types, string(ev.Type()))
+	}
+	need := []event.Type{
+		event.TypeOrderAccepted, event.TypeReservationCreated,
+		event.TypeOrderCancelled, event.TypeReservationReleased,
+	}
+	for _, n := range need {
+		found := false
+		for _, tpe := range types {
+			if tpe == string(n) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing %s in %v", n, types)
+		}
+	}
+}
+
+func TestService_IdempotencyCrashLimitation_Documented(t *testing.T) {
+	// Option A: process-local only — after "restart" (new Service), same key can create a second order.
+	dir1 := t.TempDir()
+	svc1, w1, err := Bootstrap(dir1, MustInstrument("AAPL"), testAccounts(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := domain.Price(10)
+	cmd := SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 1, IdempotencyKey: "crash-key",
+	}
+	a, err := svc1.Submit(context.Background(), cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = w1.Close()
+
+	dir2 := t.TempDir() // fresh process + fresh WAL = new order possible
+	svc2, w2, err := Bootstrap(dir2, MustInstrument("AAPL"), testAccounts(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w2.Close() })
+	b, err := svc2.Submit(context.Background(), cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both succeed as independent accepts — process-local cache does not span restart.
+	// That is the crash window: blind retry after restart can create a second order.
+	if a.OrderID == "" || b.OrderID == "" {
+		t.Fatal(a, b)
+	}
+	_ = fmt.Sprintf("first=%s second=%s (both accepted — no cross-restart dedupe)", a.OrderID, b.OrderID)
 }

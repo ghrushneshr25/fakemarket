@@ -40,14 +40,33 @@ Domain/application errors stay transport-agnostic; adapter maps via `errors.Is` 
 gRPC `context` is passed through to `Service` / executor.  
 `DEADLINE_EXCEEDED` does **not** prove the order was not accepted (transport ≠ trading outcome).
 
-### Idempotency
+### Idempotency (Option A — explicit limitation)
 
-Command carries `IdempotencyKey`. Process-local store: same key+fingerprint → cached result; conflict → error.  
-**Not** durable across restart (WAL is SoT; durable idempotency later). Documented limitation.
+Command carries `IdempotencyKey`. Process-local store only.  
+**Clients MUST NOT auto-retry ambiguous submits across process restart** until durable reconciliation exists (P6.2+).  
+Blind retry after restart can create a second order if the first was WAL-durable but the cache is empty.
+
+### Match ↔ WAL atomicity (P6.1 fail-closed)
+
+```text
+pure risk → Reserve → Match (mutates book) → journal events to WAL
+```
+
+If `WAL.Append` fails after match/reserve mutation: executor faulted, `TradingService.SetReady(false)`, no further commands.  
+**No in-memory book rollback** in P6.1 — operator restarts; recover from last durable WAL.  
+Full transactional outbox (journal-then-apply) is a future hardening.
+
+Event order journaled on submit:
+
+```text
+OrderAccepted → ReservationCreated → TradeExecuted* → ReservationPartiallyReleased* → ReservationReleased (if fully filled)
+```
+
+Cancel: `OrderCancelled` → `ReservationReleased`.
 
 ### Ordering
 
-Per-instrument single-writer mutex in `InstrumentExecutor`. gRPC concurrency does not invent match order.
+Per-instrument single-writer mutex wraps risk→reserve→match→WAL fsync (correctness over latency; P7 measures contention).
 
 ### Auth
 

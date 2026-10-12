@@ -9,12 +9,18 @@ import (
 
 // IdempotencyStore is process-local command dedupe.
 //
-// Contract (P6.1):
-//   - Same account + key + same command fingerprint → return cached result
+// Contract (P6.1 — Option A, CTO-accepted limitation):
+//   - Same account + key + same command fingerprint → return cached result (while process alive)
 //   - Same key + different fingerprint → ErrIdempotencyConflict
-//   - Not durable across process restart (WAL remains SoT; client may re-query in P6.2)
+//   - NOT durable across process restart
 //
-// Durable idempotency is a future milestone; do not treat this map as financial truth.
+// Safe client behavior until durable reconciliation (P6.2+):
+//
+//	Clients MUST NOT automatically retry an ambiguous Submit across process restart
+//	using only the idempotency key. After DEADLINE_EXCEEDED / connection loss and a
+//	server restart, wait for query/reconciliation APIs rather than blind retry.
+//
+// WAL remains financial SoT; this map is not.
 type IdempotencyStore struct {
 	mu    sync.Mutex
 	byKey map[string]idemEntry

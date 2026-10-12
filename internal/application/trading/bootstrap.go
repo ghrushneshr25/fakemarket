@@ -17,19 +17,22 @@ func Bootstrap(walDir string, inst domain.Instrument, accounts map[domain.Accoun
 	}
 	var eventSeq atomic.Uint64
 	router := NewRouter()
+	svc := NewService(router)
 	ex, err := NewInstrumentExecutor(ExecutorDeps{
 		Instrument: inst,
 		Accounts:   accounts,
 		WAL:        w,
 		EventSeq:   &eventSeq,
 		Clock:      func() time.Time { return time.Now().UTC() },
+		OnDurableFailure: func() {
+			svc.SetReady(false)
+		},
 	})
 	if err != nil {
 		_ = w.Close()
 		return nil, nil, err
 	}
 	router.Register(ex)
-	svc := NewService(router)
 	svc.SetReady(true)
 	return svc, w, nil
 }
