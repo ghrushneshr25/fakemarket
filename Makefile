@@ -1,5 +1,4 @@
-.PHONY: build test lint fmt vet run check clean help
-
+.PHONY: build test lint fmt vet run check clean help proto e2e
 APP_NAME := fakemarket
 CMD_PATH := ./cmd/fakemarket
 BIN_DIR  := bin
@@ -11,6 +10,14 @@ GOLANGCI_LINT ?= golangci-lint
 # ---------------------------------------------------------------------------
 # Primary targets
 # ---------------------------------------------------------------------------
+
+## proto: generate gRPC/protobuf Go code
+proto:
+	@mkdir -p api/gen
+	protoc -I api/proto \
+		--go_out=api/gen --go_opt=paths=source_relative \
+		--go-grpc_out=api/gen --go-grpc_opt=paths=source_relative \
+		api/proto/fakemarket/v1/trading.proto
 
 ## build: compile the FakeMarket binary
 build:

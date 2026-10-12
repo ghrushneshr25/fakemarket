@@ -895,7 +895,39 @@ P5.7 Crash Recovery  ✅
 | P6.6 | Authn/authz, rate limits, payload limits, timeouts, idempotency |
 | P6.7 | Matching engine independent of HTTP |
 
-### Phase status: ⏳
+### Phase status: 🔧 In progress (P6.1)
+
+### Roadmap
+
+```text
+P6.1 Trading Service + gRPC   ✅
+P6.2 Query / Account Service  ⏳
+P6.3 MD Read Model + REST     ⏳
+P6.4 MD Event Contract        ⏳
+P6.5 WebSocket Streaming      ⏳
+P6.6 MD Gap Recovery          ⏳
+```
+
+---
+
+## P6.1 — Trading Service + gRPC
+
+| | |
+|--|--|
+| **Status** | ✅ |
+| **Objective** | Transport-independent commands + gRPC adapter |
+| **Code** | `internal/application/trading`, `internal/transport/grpc`, `api/proto` |
+| **ADR** | [0036](./adr/0036-trading-service-and-grpc.md) |
+
+### Requirements
+
+1. `TradingService.Submit/Cancel` — no gRPC/HTTP/proto in application  
+2. Command router → per-instrument single-writer executor  
+3. gRPC `fakemarket.v1` adapter maps proto ↔ commands  
+4. Integer price ticks; error mapping; context deadlines  
+5. Process-local idempotency (not durable)  
+6. Simulator path = direct Go service call  
+7. No query/MD endpoints  
 
 ---
 
@@ -996,12 +1028,13 @@ P5.7 Crash Recovery  ✅
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
+| P6 APIs | 🔧 | P6.1 Trading Service + gRPC |
 | P6 APIs | ⏳ | After core engine stable |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Trades → Market → Cancel → IOC/FOK → Replay
-Next:   P6 APIs & Market Data
+Next:   P6.2 Query / Account Service
 ```
 
 ---

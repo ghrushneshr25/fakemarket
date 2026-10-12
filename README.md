@@ -11,19 +11,20 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 5  — Durability & Recovery  (complete P5.1–P5.7)
-  Events · WAL · Recovery · Replay · Snapshots · Crash restart
+Phase 6  — APIs & Market Data
+  P6.1 Trading Service + gRPC  (in progress / implemented)
 
+Phase 5  — Durability & Recovery  (complete)
 Phase 4–0  (complete)
 ```
 
 What exists today:
 
-- Full durability + **startup recover + safe writer resume**
+- Kernel + durability + **TradingService (direct Go) + gRPC adapter**
 
 What does **not** exist yet (by design):
 
-- WAL epoch/identity, client exactly-once, trading APIs (P6+)
+- Query/Account API (P6.2), market data (P6.3+)
 
 
 ### Progress & requirements

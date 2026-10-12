@@ -55,6 +55,26 @@ func NewEngine(instrument domain.InstrumentID) (*Engine, error) {
 // Book returns the live order book.
 func (e *Engine) Book() *book.OrderBook { return e.book }
 
+// Orders returns live order pointers (for application/journal layers).
+func (e *Engine) Orders() []*domain.Order {
+	out := make([]*domain.Order, 0, len(e.orders))
+	for _, o := range e.orders {
+		out = append(out, o)
+	}
+	return out
+}
+
+// GetOrder returns a live order by ID.
+func (e *Engine) GetOrder(id domain.OrderID) (*domain.Order, bool) {
+	o, ok := e.orders[id]
+	return o, ok
+}
+
+// GeneratedTrades returns trades produced so far (append-only slice).
+func (e *Engine) GeneratedTrades() []GeneratedTrade {
+	return append([]GeneratedTrade(nil), e.trades...)
+}
+
 // Execute runs one authoritative command through production logic.
 func (e *Engine) Execute(cmd Command) error {
 	if err := cmd.Validate(); err != nil {
