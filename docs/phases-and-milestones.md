@@ -1050,19 +1050,40 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: ⏳ **NEXT**
+### Phase status: 🔧 In progress (P7.1)
 
-### CTO stance (before implementation)
+### CTO stance (locked)
 
 ```text
 P7 is measurement-first.
 Do NOT start hot-path engine optimization yet.
 
-1. Establish metrics + observability
-2. Establish reproducible benchmark methodology
-3. Identify actual bottlenecks with data
-4. Only then optimize with evidence (P7.4)
+1. Establish metrics + observability   ← P7.1
+2. Latency boundaries                    P7.2
+3. Tracing                               P7.3
+4. Reproducible benchmarks               P7.4
+5. Profiling                             P7.5
+6. Optimize only with evidence           P7.6
 ```
+
+---
+
+## P7.1 — Metrics
+
+| | |
+|--|--|
+| **Status** | ✅ implemented — pending CTO accept |
+| **Code** | `internal/observability/metrics` |
+| **ADR** | [0042](./adr/0042-metrics.md) |
+
+### Delivered
+
+1. Prometheus registry (trading, WAL, MD, query)  
+2. Counters + latency histograms (fixed buckets)  
+3. Bounded labels only (`operation`, `result`)  
+4. Optional wiring: `Service.WithMetrics`, `wal.Config.OnAppend`, Hub/Recovery  
+5. Domain/matching free of metrics imports  
+6. Tests: exposition, nil-safe, behavior unchanged with metrics  
 
 ---
 
@@ -1166,4 +1187,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — **P6 COMPLETE** (CTO). Next: P7 Performance & Observability (measurement-first).
+**Last updated:** 2026-10-15 — P7.1 Metrics implemented (ADR 0042). Awaiting CTO accept.

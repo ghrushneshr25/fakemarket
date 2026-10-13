@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/event"
 )
@@ -81,6 +82,10 @@ type Config struct {
 
 	// openFile is for tests; nil uses os.
 	openFile func(path string) (FileOps, error)
+
+	// OnAppend is optional observability (P7.1). Must not affect durability semantics.
+	// ok=false includes encode/write/sync failures; n is record bytes on success path attempt.
+	OnAppend func(ok bool, n int, d time.Duration)
 }
 
 func (c *Config) normalize() error {
@@ -128,6 +133,8 @@ type Writer struct {
 
 	closed  bool
 	faulted bool
+
+	onAppend func(ok bool, n int, d time.Duration)
 }
 
 // Open creates/uses a WAL directory and starts segment-00000001.wal if empty.
@@ -148,8 +155,9 @@ func Open(cfg Config) (*Writer, error) {
 	}
 
 	w := &Writer{
-		cfg:     cfg,
-		seenIDs: make(map[string]struct{}),
+		cfg:      cfg,
+		seenIDs:  make(map[string]struct{}),
+		onAppend: cfg.OnAppend,
 	}
 	if err := w.openNextSegment(); err != nil {
 		return nil, err
@@ -196,43 +204,61 @@ func (w *Writer) openNextSegment() error {
 
 // Append durably records one state-authoritative event per the durability contract.
 func (w *Writer) Append(ev event.Event) error {
+	start := time.Now()
+	n := 0
+	var err error
+	defer func() {
+		if w.onAppend != nil {
+			w.onAppend(err == nil, n, time.Since(start))
+		}
+	}()
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if w.closed {
-		return ErrWALClosed
+		err = ErrWALClosed
+		return err
 	}
 	if w.faulted {
-		return ErrWALFaulted
+		err = ErrWALFaulted
+		return err
 	}
-	if err := ev.ValidateEnvelope(); err != nil {
-		return fmt.Errorf("%w: %w", ErrInvalidEvent, err)
+	if err = ev.ValidateEnvelope(); err != nil {
+		err = fmt.Errorf("%w: %w", ErrInvalidEvent, err)
+		return err
 	}
 	if !ev.IsAuthoritative() {
-		return fmt.Errorf("%w: class=%s", ErrDerivedEvent, ev.Class())
+		err = fmt.Errorf("%w: class=%s", ErrDerivedEvent, ev.Class())
+		return err
 	}
 	if !event.IsStateAuthoritative(ev.Type()) {
-		return fmt.Errorf("%w: type=%s", ErrNotStateAuthoritative, ev.Type())
+		err = fmt.Errorf("%w: type=%s", ErrNotStateAuthoritative, ev.Type())
+		return err
 	}
 
 	seq := uint64(ev.Sequence())
 	if seq == 0 {
-		return fmt.Errorf("%w: sequence 0", ErrInvalidEvent)
-	}
-	if err := w.checkSequence(seq); err != nil {
+		err = fmt.Errorf("%w: sequence 0", ErrInvalidEvent)
 		return err
+	}
+	if err = w.checkSequence(seq); err != nil {
+		return err // err already set
 	}
 	id := string(ev.ID())
 	if _, ok := w.seenIDs[id]; ok {
-		return fmt.Errorf("%w: %s", ErrDuplicateEventID, id)
+		err = fmt.Errorf("%w: %s", ErrDuplicateEventID, id)
+		return err
 	}
 
 	payload, err := event.Encode(ev)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrEncodeFailed, err)
+		err = fmt.Errorf("%w: %w", ErrEncodeFailed, err)
+		return err
 	}
 	if len(payload) > w.cfg.MaxPayloadBytes {
-		return fmt.Errorf("%w: payload %d > max %d", ErrRecordTooLarge, len(payload), w.cfg.MaxPayloadBytes)
+		err = fmt.Errorf("%w: payload %d > max %d", ErrRecordTooLarge, len(payload), w.cfg.MaxPayloadBytes)
+		return err
 	}
 
 	rec, err := buildEventRecord(seq, uint64(ev.Timestamp().UnixNano()), payload)
@@ -240,31 +266,36 @@ func (w *Writer) Append(ev event.Event) error {
 		return err
 	}
 	recSize := int64(len(rec))
+	n = len(rec)
 	if recSize > w.cfg.MaxSegmentBytes {
-		return fmt.Errorf("%w: record %d > segment max %d", ErrRecordTooLarge, recSize, w.cfg.MaxSegmentBytes)
+		err = fmt.Errorf("%w: record %d > segment max %d", ErrRecordTooLarge, recSize, w.cfg.MaxSegmentBytes)
+		return err
 	}
 
 	// Rotate if current segment cannot hold this record (and already has content beyond header).
 	if w.segBytes+recSize > w.cfg.MaxSegmentBytes && w.segBytes > int64(SegmentHeaderSize) {
-		if err := w.rotateLocked(); err != nil {
+		if err = w.rotateLocked(); err != nil {
 			return err
 		}
 	}
 
 	// --- durability boundary: write → flush → sync; commit state only after success ---
-	if err := writeFull(w.seg, rec); err != nil {
+	if err = writeFull(w.seg, rec); err != nil {
 		w.faulted = true
-		return fmt.Errorf("%w: %w", ErrWriteFailed, err)
+		err = fmt.Errorf("%w: %w", ErrWriteFailed, err)
+		return err
 	}
-	if err := w.seg.Flush(); err != nil {
+	if err = w.seg.Flush(); err != nil {
 		w.faulted = true
-		return fmt.Errorf("%w: %w", ErrFlushFailed, err)
+		err = fmt.Errorf("%w: %w", ErrFlushFailed, err)
+		return err
 	}
 	if w.cfg.SyncOnAppend {
-		if err := w.seg.Sync(); err != nil {
+		if err = w.seg.Sync(); err != nil {
 			// Bytes may exist on disk; do NOT advance lastSequence; fault writer.
 			w.faulted = true
-			return fmt.Errorf("%w: %w", ErrSyncFailed, err)
+			err = fmt.Errorf("%w: %w", ErrSyncFailed, err)
+			return err
 		}
 	}
 

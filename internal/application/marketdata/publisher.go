@@ -3,9 +3,11 @@ package marketdata
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	mdevent "github.com/ghrushneshr25/fakemarket/internal/marketdata/event"
+	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 )
 
 // DefaultClientQueue is the bounded outbound buffer per WebSocket client,
@@ -72,6 +74,14 @@ type Hub struct {
 
 	// per-instrument publish serialization (preserve enqueue order)
 	instMu sync.Map // InstrumentID → *sync.Mutex
+
+	prom *metrics.Registry // optional P7.1
+}
+
+// WithMetrics attaches Prometheus metrics (optional).
+func (h *Hub) WithMetrics(m *metrics.Registry) *Hub {
+	h.prom = m
+	return h
 }
 
 // NewHub constructs a publisher hub.
@@ -119,8 +129,12 @@ func (h *Hub) RegisterInstrument(id domain.InstrumentID) {
 func (h *Hub) AddSubscriber(s Subscriber) {
 	h.mu.Lock()
 	h.subs[s] = struct{}{}
+	n := len(h.subs)
 	h.mu.Unlock()
 	h.Metrics.Connections.Add(1)
+	if h.prom != nil {
+		h.prom.MDClients.Set(float64(n))
+	}
 }
 
 // RemoveSubscriber unregisters a client.
@@ -128,9 +142,14 @@ func (h *Hub) RemoveSubscriber(s Subscriber) {
 	h.mu.Lock()
 	if _, ok := h.subs[s]; ok {
 		delete(h.subs, s)
+		n := len(h.subs)
 		h.mu.Unlock()
 		h.Metrics.Connections.Add(-1)
 		h.Metrics.ClientsDisconnected.Add(1)
+		if h.prom != nil {
+			h.prom.MDClients.Set(float64(n))
+			h.prom.MDDisconnects.Inc()
+		}
 		return
 	}
 	h.mu.Unlock()
@@ -169,6 +188,7 @@ func (h *Hub) lockInstrument(id domain.InstrumentID) *sync.Mutex {
 // Never blocks on slow clients: full queue → Close subscriber.
 // Per-instrument mutex preserves enqueue order for that instrument.
 func (h *Hub) Publish(ev mdevent.Event) error {
+	start := time.Now()
 	inst := ev.InstrumentID()
 	mu := h.lockInstrument(inst)
 	mu.Lock()
@@ -180,6 +200,9 @@ func (h *Hub) Publish(ev mdevent.Event) error {
 	}
 	// frame is immutable from here; subscribers must copy if they retain it.
 	h.Metrics.EventsPublished.Add(1)
+	if h.prom != nil {
+		h.prom.ObserveMDPublish(time.Since(start))
+	}
 
 	h.mu.RLock()
 	list := make([]Subscriber, 0, len(h.subs))
@@ -208,6 +231,9 @@ func (h *Hub) Publish(ev mdevent.Event) error {
 		}
 		h.Metrics.QueueFull.Add(1)
 		h.Metrics.SlowClientDrops.Add(1)
+		if h.prom != nil {
+			h.prom.MDQueueFull.Inc()
+		}
 		slow = append(slow, s)
 	}
 	for _, s := range slow {

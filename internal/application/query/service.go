@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"sort"
 	"sync/atomic"
+	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/application/trading"
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
+	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 )
 
 // Service is the transport-independent read-only query boundary.
@@ -17,8 +19,9 @@ import (
 // AsOfSequence is EventSeq.Load() watermark — not a multi-domain snapshot version.
 // See ADR 0037.
 type Service struct {
-	read  *trading.ReadModel
-	ready atomic.Bool
+	read    *trading.ReadModel
+	ready   atomic.Bool
+	metrics *metrics.Registry
 }
 
 // NewService constructs a QueryService over the trading read model.
@@ -28,8 +31,25 @@ func NewService(read *trading.ReadModel) *Service {
 	return s
 }
 
+// WithMetrics attaches optional P7.1 metrics.
+func (s *Service) WithMetrics(m *metrics.Registry) *Service {
+	s.metrics = m
+	return s
+}
+
 // SetReady controls query admission (startup gate).
 func (s *Service) SetReady(v bool) { s.ready.Store(v) }
+
+func (s *Service) observe(op string, err error, start time.Time) {
+	if s.metrics == nil {
+		return
+	}
+	r := metrics.ResultOK
+	if err != nil {
+		r = metrics.ResultError
+	}
+	s.metrics.ObserveQuery(op, r, time.Since(start))
+}
 
 func (s *Service) check(ctx context.Context) error {
 	if !s.ready.Load() {
@@ -51,16 +71,22 @@ func (s *Service) asOf() domain.Sequence {
 
 // GetAccount returns an account view with observation AsOfSequence (ADR 0037).
 func (s *Service) GetAccount(ctx context.Context, q GetAccountQuery) (AccountView, error) {
+	start := time.Now()
 	if err := s.check(ctx); err != nil {
+		s.observe("get_account", err, start)
 		return AccountView{}, err
 	}
 	if q.AccountID == "" {
-		return AccountView{}, fmt.Errorf("%w: account_id", ErrInvalidQuery)
+		err := fmt.Errorf("%w: account_id", ErrInvalidQuery)
+		s.observe("get_account", err, start)
+		return AccountView{}, err
 	}
 	asOf := s.asOf()
 	cash, currency, positions, ok := s.read.Accounts.SnapshotAccount(q.AccountID)
 	if !ok {
-		return AccountView{}, ErrAccountNotFound
+		err := ErrAccountNotFound
+		s.observe("get_account", err, start)
+		return AccountView{}, err
 	}
 	reserved := domain.Money(0)
 	if s.read.Res != nil {
@@ -84,26 +110,35 @@ func (s *Service) GetAccount(ctx context.Context, q GetAccountQuery) (AccountVie
 			open++
 		}
 	}
-	return AccountView{
+	v := AccountView{
 		AccountID: q.AccountID, Currency: currency,
 		Cash: cash, ReservedCash: reserved, AvailableCash: avail,
 		Positions: pvs, OpenOrders: open, AsOfSequence: asOf,
-	}, nil
+	}
+	s.observe("get_account", nil, start)
+	return v, nil
 }
 
 // GetOrder returns one order owned by the account (else not found — no leak).
 func (s *Service) GetOrder(ctx context.Context, q GetOrderQuery) (OrderView, error) {
+	start := time.Now()
 	if err := s.check(ctx); err != nil {
+		s.observe("get_order", err, start)
 		return OrderView{}, err
 	}
 	if q.AccountID == "" || q.OrderID == "" {
-		return OrderView{}, fmt.Errorf("%w: account_id/order_id", ErrInvalidQuery)
+		err := fmt.Errorf("%w: account_id/order_id", ErrInvalidQuery)
+		s.observe("get_order", err, start)
+		return OrderView{}, err
 	}
 	sn, err := s.read.SnapshotOrder(q.OrderID, q.AccountID)
 	if err != nil {
+		s.observe("get_order", ErrOrderNotFound, start)
 		return OrderView{}, ErrOrderNotFound
 	}
-	return orderView(sn, s.asOf()), nil
+	v := orderView(sn, s.asOf())
+	s.observe("get_order", nil, start)
+	return v, nil
 }
 
 // ListOrders returns a paginated account order list (Sequence DESC).

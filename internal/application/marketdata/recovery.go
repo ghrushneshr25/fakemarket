@@ -9,6 +9,7 @@ import (
 	"github.com/ghrushneshr25/fakemarket/internal/application/trading"
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	mdevent "github.com/ghrushneshr25/fakemarket/internal/marketdata/event"
+	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 )
 
 // RecoveryMetrics are P6.6 observability counters.
@@ -49,6 +50,7 @@ type RecoveryService struct {
 	ready   atomic.Bool
 	Metrics RecoveryMetrics
 	clock   func() time.Time
+	prom    *metrics.Registry
 }
 
 // NewRecoveryService constructs recovery API.
@@ -61,6 +63,12 @@ func NewRecoveryService(read *trading.ReadModel, alloc *mdevent.Allocator) *Reco
 	return s
 }
 
+// WithMetrics attaches optional P7.1 metrics.
+func (s *RecoveryService) WithMetrics(m *metrics.Registry) *RecoveryService {
+	s.prom = m
+	return s
+}
+
 // SetReady controls admission.
 func (s *RecoveryService) SetReady(v bool) { s.ready.Store(v) }
 
@@ -69,33 +77,36 @@ func (s *RecoveryService) Allocator() *mdevent.Allocator { return s.alloc }
 
 // GetBookSnapshot returns an atomic public book snapshot for recovery.
 func (s *RecoveryService) GetBookSnapshot(ctx context.Context, instrumentID domain.InstrumentID) (BookSnapshot, error) {
+	start := time.Now()
 	s.Metrics.Attempts.Add(1)
 	s.Metrics.SnapshotGeneration.Add(1)
-	if !s.ready.Load() {
+	fail := func(err error) (BookSnapshot, error) {
 		s.Metrics.Failures.Add(1)
-		return BookSnapshot{}, ErrNotReady
-	}
-	if err := ctx.Err(); err != nil {
-		s.Metrics.Failures.Add(1)
+		if s.prom != nil {
+			s.prom.ObserveSnapshot(false, time.Since(start))
+		}
 		return BookSnapshot{}, err
 	}
+	if !s.ready.Load() {
+		return fail(ErrNotReady)
+	}
+	if err := ctx.Err(); err != nil {
+		return fail(err)
+	}
 	if instrumentID == "" {
-		s.Metrics.Failures.Add(1)
-		return BookSnapshot{}, fmt.Errorf("%w: instrument_id", ErrInvalidQuery)
+		return fail(fmt.Errorf("%w: instrument_id", ErrInvalidQuery))
 	}
 	if s.read == nil {
-		s.Metrics.Failures.Add(1)
-		return BookSnapshot{}, ErrNotReady
+		return fail(ErrNotReady)
 	}
 
 	// Atomic book observation under instrument lock (inside SnapshotRecoveryBook).
 	raw, err := s.read.SnapshotRecoveryBook(instrumentID)
 	if err != nil {
-		s.Metrics.Failures.Add(1)
 		if err == trading.ErrInstrumentUnknown {
-			return BookSnapshot{}, ErrInstrumentUnknown
+			return fail(ErrInstrumentUnknown)
 		}
-		return BookSnapshot{}, err
+		return fail(err)
 	}
 
 	asOf := s.read.LastSequence()
@@ -124,8 +135,7 @@ func (s *RecoveryService) GetBookSnapshot(ctx context.Context, instrumentID doma
 		out.Asks = append(out.Asks, DepthLevelView{Price: l.Price, Quantity: l.Quantity, OrderCount: l.OrderCount})
 	}
 	if err := validateSnapshotBook(out); err != nil {
-		s.Metrics.Failures.Add(1)
-		return BookSnapshot{}, err
+		return fail(err)
 	}
 	if len(out.Bids) > 0 {
 		b := out.Bids[0]
@@ -136,6 +146,9 @@ func (s *RecoveryService) GetBookSnapshot(ctx context.Context, instrumentID doma
 		out.Ask = &a
 	}
 	s.Metrics.Success.Add(1)
+	if s.prom != nil {
+		s.prom.ObserveSnapshot(true, time.Since(start))
+	}
 	return out, nil
 }
 

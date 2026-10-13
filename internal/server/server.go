@@ -37,6 +37,7 @@ func New(cfg config.Config, log *slog.Logger, register ...func(*http.ServeMux)) 
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
+	// GET /metrics registered by callers via register (P7.1) — keep server free of metrics dep.
 	for _, reg := range register {
 		if reg != nil {
 			reg(mux)
