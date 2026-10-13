@@ -1,6 +1,6 @@
 # ADR 0040 — Market Data WebSocket (P6.5)
 
-**Status:** Accepted (CTO contract closed)  
+**Status:** Accepted / CLOSED (CTO `19a8861`)  
 **Date:** 2026-10-15  
 **Phase:** P6 — APIs & Market Data  
 **Milestone:** P6.5
