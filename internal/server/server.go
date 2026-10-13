@@ -23,7 +23,9 @@ type Server struct {
 }
 
 // New constructs a Server from configuration.
-func New(cfg config.Config, log *slog.Logger) *Server {
+// Optional route registrars attach adapters (e.g. market-data REST) without
+// embedding domain logic in this package.
+func New(cfg config.Config, log *slog.Logger, register ...func(*http.ServeMux)) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -35,6 +37,11 @@ func New(cfg config.Config, log *slog.Logger) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
+	for _, reg := range register {
+		if reg != nil {
+			reg(mux)
+		}
+	}
 
 	s.http = &http.Server{
 		Addr:              cfg.Addr(),

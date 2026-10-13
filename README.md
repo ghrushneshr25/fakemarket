@@ -13,8 +13,9 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ```text
 Phase 6  — APIs & Market Data
   P6.1 Trading Service + gRPC     ✅ ACCEPTED
-  P6.2 Query / Account Service    ✅ implemented (CTO gate)
-  P6.3 MD Read Model + REST       ⏳
+  P6.2 Query / Account Service    ✅ ACCEPTED
+  P6.3 MD Read Model + REST       ✅ implemented (CTO gate)
+  P6.4 MD Event Contract          ⏳
 
 Phase 5  — Durability & Recovery  ✅ complete
 Phase 4–0                         ✅ complete
@@ -22,13 +23,13 @@ Phase 4–0                         ✅ complete
 
 What exists today:
 
-- Kernel + durability + **TradingService** + **QueryService** (direct Go) + gRPC adapters
-- CommandBatch WAL atomicity; per-instrument concurrency lanes (P6.1-C1)
-- Read-only account/order/position/trade/reservation views with `AsOfSequence` (observation watermark)
+- Kernel + durability + **TradingService** + **QueryService** + **MarketDataService**
+- gRPC (trading/query) + REST (market data: quote/book/trades/status)
+- CommandBatch WAL; per-instrument lanes; AsOfSequence observation watermark
 
 What does **not** exist yet (by design):
 
-- Market data API (P6.3+), REST/WebSocket product surfaces
+- WebSocket/streaming MD, gap recovery, external MD DB
 - Concurrent multi-instrument mutation of the same account (deferred ownership model)
 ### Progress & requirements
 

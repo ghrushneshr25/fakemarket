@@ -895,15 +895,15 @@ P5.7 Crash Recovery  ✅
 | P6.6 | Authn/authz, rate limits, payload limits, timeouts, idempotency |
 | P6.7 | Matching engine independent of HTTP |
 
-### Phase status: 🔧 In progress (next: P6.2)
+### Phase status: 🔧 In progress (next: P6.4 after P6.3 CTO)
 
 ### Roadmap
 
 ```text
 P6.1 Trading Service + gRPC   ✅ CLOSED (CTO accepted)
 P6.2 Query / Account Service  ✅ CLOSED (CTO accepted)
-P6.3 MD Read Model + REST     ⏳ NEXT
-P6.4 MD Event Contract        ⏳
+P6.3 MD Read Model + REST     ✅ implemented (CTO gate)
+P6.4 MD Event Contract        ⏳ NEXT
 P6.5 WebSocket Streaming      ⏳
 P6.6 MD Gap Recovery          ⏳
 ```
@@ -969,6 +969,28 @@ P6.6 MD Gap Recovery          ⏳
 6. Read-only: no book/account/reservation/WAL mutation from query path  
 7. gRPC `QueryService` adapter only  
 8. `go test -race` clean with concurrent query during trading  
+
+---
+
+## P6.3 — Market Data Read Model + REST
+
+| | |
+|--|--|
+| **Status** | ✅ implemented — pending CTO accept |
+| **Objective** | Public market-data views (quote/depth/trades/status) + REST adapter |
+| **Code** | `internal/application/marketdata`, `internal/transport/rest`, trading MD snapshots |
+| **ADR** | [0038](./adr/0038-market-data-read-model-and-rest.md) |
+
+### Requirements
+
+1. Transport-independent `MarketDataService` (no HTTP in application)  
+2. Quote, depth (aggregated levels), recent trades (newest first), instrument status  
+3. No private fields (account/order IDs) on public tape  
+4. `AsOfSequence` observation watermark (same P6.2 contract)  
+5. REST adapter only: `/v1/market-data/{instrument}/…`  
+6. depth default 20 max 100; trades limit default 50 max 200  
+7. Instrument-level lock for snapshots; no global MD lock  
+8. Concurrent trading + MD race-clean  
 
 ---
 
@@ -1069,12 +1091,12 @@ P6.6 MD Gap Recovery          ⏳
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
-| P6 APIs | 🔧 | P6.1 ✅ · P6.2 implemented → CTO · **P6.3 MD next** |
+| P6 APIs | 🔧 | P6.1–P6.2 ✅ · P6.3 MD implemented → CTO · **P6.4 next** |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Risk → WAL → TradingService (P6.1) → QueryService (P6.2)
-Next:   P6.3 MD Read Model + REST (after P6.2 CTO accept)
+Next:   P6.4 MD Event Contract (after P6.3 CTO accept)
 ```
 
 ---
@@ -1086,4 +1108,4 @@ Next:   P6.3 MD Read Model + REST (after P6.2 CTO accept)
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.2 CTO ACCEPTED (AsOfSequence contract clarified). Next: P6.3 MD Read Model + REST.
+**Last updated:** 2026-10-15 — P6.3 MD Read Model + REST implemented (ADR 0038). Awaiting CTO accept.
