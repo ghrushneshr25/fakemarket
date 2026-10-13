@@ -34,7 +34,7 @@ func (h *MarketDataHandler) quote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, mapQuote(v))
+	writeJSON(w, mapQuote(v))
 }
 
 func (h *MarketDataHandler) book(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +53,7 @@ func (h *MarketDataHandler) book(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, mapDepth(v))
+	writeJSON(w, mapDepth(v))
 }
 
 func (h *MarketDataHandler) trades(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func (h *MarketDataHandler) trades(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, mapTrades(v))
+	writeJSON(w, mapTrades(v))
 }
 
 func (h *MarketDataHandler) status(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func (h *MarketDataHandler) status(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, mapStatus(v))
+	writeJSON(w, mapStatus(v))
 }
 
 type levelJSON struct {

@@ -21,9 +21,9 @@ func writeError(w http.ResponseWriter, err error) {
 	_ = json.NewEncoder(w).Encode(ErrorBody{Code: code, Message: err.Error()})
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
