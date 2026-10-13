@@ -1,6 +1,7 @@
 package trading
 
 import (
+	"sort"
 	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
@@ -173,16 +174,22 @@ func (x *InstrumentExecutor) listPublicTrades(limit int) []PublicTradeSnap {
 	if limit <= 0 {
 		return nil
 	}
-	// Newest first: reverse chronological over append-only slice.
-	out := make([]PublicTradeSnap, 0, min(limit, len(trades)))
-	for i := len(trades) - 1; i >= 0 && len(out) < limit; i-- {
-		tr := trades[i].Trade
-		out = append(out, PublicTradeSnap{
+	// Copy under lock, then sort by Trade.Sequence DESC (authoritative; not timestamp).
+	all := make([]PublicTradeSnap, 0, len(trades))
+	for _, gt := range trades {
+		tr := gt.Trade
+		all = append(all, PublicTradeSnap{
 			TradeID: tr.ID, InstrumentID: tr.InstrumentID,
 			Price: tr.Price, Quantity: tr.Quantity, Sequence: tr.Sequence, Timestamp: tr.Timestamp,
 		})
 	}
-	return out
+	sort.SliceStable(all, func(i, j int) bool {
+		return all[i].Sequence > all[j].Sequence // DESC by authoritative sequence
+	})
+	if limit > len(all) {
+		limit = len(all)
+	}
+	return all[:limit]
 }
 
 func (x *InstrumentExecutor) snapshotInstrumentStatus() InstrumentStatusSnap {

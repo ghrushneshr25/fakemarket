@@ -95,6 +95,53 @@ func TestREST_UnknownInstrument(t *testing.T) {
 	}
 }
 
+func TestREST_MarketData_NotReady(t *testing.T) {
+	a1, _ := domain.NewAccount(domain.AccountParams{ID: "A1", Currency: domain.CurrencyINR, Cash: 1_000_000})
+	boot, err := trading.BootstrapFull(t.TempDir(), trading.MustInstrument("AAPL"), map[domain.AccountID]*domain.Account{
+		"A1": &a1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = boot.WAL.Close() })
+	md := marketdata.NewService(boot.Read)
+	md.SetReady(false)
+	mux := http.NewServeMux()
+	NewMarketDataHandler(md).Register(mux)
+
+	// Known instrument, service not ready → 503 (not 404)
+	req := httptest.NewRequest(http.MethodGet, "/v1/market-data/AAPL/quote", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("want 503, got %d %s", rr.Code, rr.Body.String())
+	}
+	var eb ErrorBody
+	_ = json.Unmarshal(rr.Body.Bytes(), &eb)
+	if eb.Code != "UNAVAILABLE" {
+		t.Fatal(eb)
+	}
+
+	md.SetReady(true)
+	req = httptest.NewRequest(http.MethodGet, "/v1/market-data/ZZZ/quote", nil)
+	rr = httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("want 404 unknown instrument, got %d", rr.Code)
+	}
+}
+
+func TestREST_NonNumericDepth(t *testing.T) {
+	_, mux, done := restSeed(t)
+	defer done()
+	req := httptest.NewRequest(http.MethodGet, "/v1/market-data/AAPL/book?depth=abc", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatal(rr.Code)
+	}
+}
+
 func TestREST_TradesAndStatus(t *testing.T) {
 	ts, mux, done := restSeed(t)
 	defer done()

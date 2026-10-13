@@ -976,7 +976,7 @@ P6.6 MD Gap Recovery          ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (closure: race/privacy/order/404·503/Q27–Q50) |
 | **Objective** | Public market-data views (quote/depth/trades/status) + REST adapter |
 | **Code** | `internal/application/marketdata`, `internal/transport/rest`, trading MD snapshots |
 | **ADR** | [0038](./adr/0038-market-data-read-model-and-rest.md) |
@@ -1108,4 +1108,4 @@ Next:   P6.4 MD Event Contract (after P6.3 CTO accept)
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.3 MD Read Model + REST implemented (ADR 0038). Awaiting CTO accept.
+**Last updated:** 2026-10-15 — P6.3 CTO ACCEPTED. Next: P6.4 MD Event Contract.

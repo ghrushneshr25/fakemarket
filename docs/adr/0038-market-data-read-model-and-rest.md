@@ -44,6 +44,20 @@ GET /v1/market-data/{instrument}/status
 
 JSON uses `price_ticks`, integer quantities. Errors use `{code,message}`.
 
+### HTTP error distinction (required)
+
+| Condition | Application error | HTTP |
+|-----------|-------------------|------|
+| Unknown / unregistered instrument | `ErrInstrumentUnknown` | **404** NOT_FOUND |
+| Service admission gate off / nil read model | `ErrNotReady` | **503** UNAVAILABLE |
+| Bad depth/limit/query params | `ErrInvalidQuery` / range errors | **400** INVALID_ARGUMENT |
+
+Do **not** collapse “not registered” and “not ready” into one code.
+
+### Trade ordering
+
+`ListRecentTrades` orders by **Trade.Sequence DESC** (authoritative). Timestamp is display-only and must not be the determinism key when timestamps collide.
+
 ### Why no separate MD database / stream
 
 P6.3 establishes the clean read boundary. WebSocket/event bus/gap recovery are P6.4+.

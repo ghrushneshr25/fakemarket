@@ -224,6 +224,159 @@ func TestConcurrentTradingAndMD(t *testing.T) {
 	}
 }
 
+func TestPublicTape_NoPrivateIdentifiers(t *testing.T) {
+	ts, md, done := seedMD(t)
+	defer done()
+	px := domain.Price(100)
+	_, _ = ts.Submit(context.Background(), trading.SubmitOrderCommand{
+		AccountID: "A2", InstrumentID: "AAPL", Side: domain.SideSell,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 2,
+	})
+	_, _ = ts.Submit(context.Background(), trading.SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 2,
+	})
+	q, _ := md.GetQuote(context.Background(), "AAPL")
+	d, _ := md.GetDepth(context.Background(), "AAPL", 10)
+	tr, _ := md.ListRecentTrades(context.Background(), "AAPL", 10)
+	st, _ := md.GetInstrumentStatus(context.Background(), "AAPL")
+	for _, v := range []any{q, d, tr, st} {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(raw)
+		for _, bad := range []string{
+			"account_id", "AccountID", "buy_order", "sell_order",
+			"BuyOrderID", "SellOrderID", "reservation", "ReservationID",
+		} {
+			if containsStr(s, bad) {
+				t.Fatalf("private field %q leaked in %s", bad, s)
+			}
+		}
+	}
+}
+
+func TestDepth_OrderingExplicit(t *testing.T) {
+	ts, md, done := seedMD(t)
+	defer done()
+	for _, p := range []domain.Price{97, 99, 98} {
+		pp := p
+		_, err := ts.Submit(context.Background(), trading.SubmitOrderCommand{
+			AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+			Type: domain.OrderTypeLimit, Price: &pp, Quantity: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []domain.Price{103, 101, 102} {
+		pp := p
+		_, err := ts.Submit(context.Background(), trading.SubmitOrderCommand{
+			AccountID: "A2", InstrumentID: "AAPL", Side: domain.SideSell,
+			Type: domain.OrderTypeLimit, Price: &pp, Quantity: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	d, err := md.GetDepth(context.Background(), "AAPL", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i < len(d.Bids); i++ {
+		if d.Bids[i-1].Price <= d.Bids[i].Price {
+			t.Fatalf("bids not descending: %+v", d.Bids)
+		}
+	}
+	for i := 1; i < len(d.Asks); i++ {
+		if d.Asks[i-1].Price >= d.Asks[i].Price {
+			t.Fatalf("asks not ascending: %+v", d.Asks)
+		}
+	}
+}
+
+func TestTrades_OrderBySequenceNotTimestamp(t *testing.T) {
+	ts, md, done := seedMD(t)
+	defer done()
+	// Multiple matches → multiple trades; must be sequence DESC.
+	px := domain.Price(100)
+	_, _ = ts.Submit(context.Background(), trading.SubmitOrderCommand{
+		AccountID: "A2", InstrumentID: "AAPL", Side: domain.SideSell,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 3,
+	})
+	_, _ = ts.Submit(context.Background(), trading.SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 1,
+	})
+	_, _ = ts.Submit(context.Background(), trading.SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 1,
+	})
+	v, err := md.ListRecentTrades(context.Background(), "AAPL", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Trades) < 2 {
+		t.Fatal(v)
+	}
+	for i := 1; i < len(v.Trades); i++ {
+		if v.Trades[i-1].Sequence <= v.Trades[i].Sequence {
+			t.Fatalf("trades must be sequence DESC: %+v", v.Trades)
+		}
+	}
+}
+
+func TestMarketData_NotReady(t *testing.T) {
+	_, md, done := seedMD(t)
+	defer done()
+	md.SetReady(false)
+	_, err := md.GetQuote(context.Background(), "AAPL")
+	if !errors.Is(err, ErrNotReady) {
+		t.Fatal(err)
+	}
+	// Known instrument still 404 path when ready but missing id
+	md.SetReady(true)
+	_, err = md.GetQuote(context.Background(), "NOSUCH")
+	if !errors.Is(err, ErrInstrumentUnknown) {
+		t.Fatal(err)
+	}
+}
+
+func TestDepth_ParamEdgeCases(t *testing.T) {
+	_, md, done := seedMD(t)
+	defer done()
+	// omitted/zero → default
+	d, err := md.GetDepth(context.Background(), "AAPL", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = d
+	_, err = md.GetDepth(context.Background(), "AAPL", -1)
+	if !errors.Is(err, ErrDepthOutOfRange) {
+		t.Fatal(err)
+	}
+	_, err = md.ListRecentTrades(context.Background(), "AAPL", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = md.ListRecentTrades(context.Background(), "AAPL", MaxLimit+1)
+	if !errors.Is(err, ErrLimitOutOfRange) {
+		t.Fatal(err)
+	}
+}
+
+func containsStr(s, sub string) bool {
+	return len(sub) > 0 && len(s) >= len(sub) && (func() bool {
+		for i := 0; i+len(sub) <= len(s); i++ {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+		return false
+	})()
+}
+
 func TestDeterministicDepth(t *testing.T) {
 	ts, md, done := seedMD(t)
 	defer done()
