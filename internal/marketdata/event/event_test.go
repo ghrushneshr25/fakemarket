@@ -160,3 +160,86 @@ func TestInstrumentStatus(t *testing.T) {
 		t.Fatal(pl)
 	}
 }
+
+func TestAllocator_OneEventOneSequence(t *testing.T) {
+	a := NewAllocator()
+	s1 := a.Next("AAPL")
+	s2 := a.Next("AAPL")
+	s3 := a.Next("TSLA")
+	if s1 != 1 || s2 != 2 || s3 != 1 {
+		t.Fatal(s1, s2, s3)
+	}
+	// One command → many events = consecutive seqs on same instrument
+	if a.LastIssued("AAPL") != 2 {
+		t.Fatal(a.LastIssued("AAPL"))
+	}
+}
+
+func TestStreamCursor_SnapshotThenGap(t *testing.T) {
+	c := StreamCursor{}
+	snap, _ := New(env(TypeBookSnapshot, 100), BookSnapshotPayload{
+		Bids: []Level{{PriceTicks: 100, Quantity: 1, OrderCount: 1}},
+	})
+	c, err := c.ApplySnapshot(snap)
+	if err != nil || c.LastSeq != 100 {
+		t.Fatal(c, err)
+	}
+	// next must be 101
+	d102, _ := New(env(TypeBookDelta, 102), BookDeltaPayload{
+		Changes: []BookLevelChange{{Side: SideBid, PriceTicks: 100, Quantity: 0}},
+	})
+	_, err = c.Observe(d102)
+	if !errors.Is(err, ErrSequenceGap) {
+		t.Fatal(err)
+	}
+	d101, _ := New(env(TypeBookDelta, 101), BookDeltaPayload{
+		Changes: []BookLevelChange{{Side: SideBid, PriceTicks: 99, Quantity: 5, OrderCount: 1}},
+	})
+	c, err = c.Observe(d101)
+	if err != nil || c.LastSeq != 101 {
+		t.Fatal(err, c)
+	}
+}
+
+func TestStreamCursor_DupAndRegress(t *testing.T) {
+	c := StreamCursor{InstrumentID: "AAPL", LastSeq: 100}
+	e100, _ := New(env(TypeHeartbeat, 100), HeartbeatPayload{})
+	_, err := c.Observe(e100)
+	if !errors.Is(err, ErrSequenceDup) {
+		t.Fatal(err)
+	}
+	e99, _ := New(env(TypeHeartbeat, 99), HeartbeatPayload{})
+	_, err = c.Observe(e99)
+	if !errors.Is(err, ErrSequenceRegress) {
+		t.Fatal(err)
+	}
+	e101, _ := New(env(TypeHeartbeat, 101), HeartbeatPayload{})
+	c2, err := c.Observe(e101)
+	if err != nil || c2.LastSeq != 101 {
+		t.Fatal(err, c2)
+	}
+}
+
+func TestDecode_UnknownTypeAndVersionFailClosed(t *testing.T) {
+	raw := []byte(`{"id":"1","type":"md.Nope","version":1,"instrument_id":"AAPL","md_sequence":1,"as_of_event_seq":0,"timestamp":"2026-10-15T00:00:00Z","payload":{}}`)
+	_, err := Decode(raw)
+	if !errors.Is(err, ErrUnknownType) {
+		t.Fatal(err)
+	}
+	raw2 := []byte(`{"id":"1","type":"md.Heartbeat","version":99,"instrument_id":"AAPL","md_sequence":1,"as_of_event_seq":0,"timestamp":"2026-10-15T00:00:00Z","payload":{}}`)
+	_, err = Decode(raw2)
+	if !errors.Is(err, ErrDecodeFailed) {
+		t.Fatal(err)
+	}
+}
+
+func TestBookDelta_AbsoluteQuantityDocumented(t *testing.T) {
+	// quantity is absolute post-update; 0 removes — validated by construct
+	p := BookDeltaPayload{Changes: []BookLevelChange{
+		{Side: SideAsk, PriceTicks: 100, Quantity: 500, OrderCount: 3},
+		{Side: SideAsk, PriceTicks: 101, Quantity: 0, OrderCount: 0},
+	}}
+	if err := p.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

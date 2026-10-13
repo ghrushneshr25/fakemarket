@@ -92,10 +92,18 @@ func Encode(e Event) ([]byte, error) {
 }
 
 // Decode parses wire JSON into an Event (payload left as raw; use DecodePayload).
+// Fail-closed: unknown type or unsupported version → error (no silent ignore).
 func Decode(raw []byte) (Event, error) {
 	var w Wire
 	if err := json.Unmarshal(raw, &w); err != nil {
 		return Event{}, fmt.Errorf("%w: %v", ErrDecodeFailed, err)
+	}
+	if !IsKnown(Type(w.Type)) {
+		return Event{}, fmt.Errorf("%w: %s", ErrUnknownType, w.Type)
+	}
+	if SchemaVersion(w.Version) != V1 {
+		// P6.4 only supports V1; unknown versions fail closed.
+		return Event{}, fmt.Errorf("%w: version %d (only V1 supported)", ErrDecodeFailed, w.Version)
 	}
 	env := Envelope{
 		ID: domain.EventID(w.ID), Type: Type(w.Type), Version: SchemaVersion(w.Version),

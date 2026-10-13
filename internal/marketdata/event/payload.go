@@ -81,11 +81,17 @@ const (
 	SideAsk BookSide = "ASK"
 )
 
-// BookLevelChange is one level in a delta (qty 0 = level removed).
+// BookLevelChange is one level in a delta.
+//
+// Quantity is the ABSOLUTE post-update resting quantity at that price
+// (not a signed delta / not arithmetic +=).
+//
+//	quantity > 0  → set level to this qty/order_count
+//	quantity == 0 → remove the level entirely
 type BookLevelChange struct {
 	Side       BookSide        `json:"side"`
 	PriceTicks domain.Price    `json:"price_ticks"`
-	Quantity   domain.Quantity `json:"quantity"` // 0 = remove
+	Quantity   domain.Quantity `json:"quantity"` // absolute; 0 = remove
 	OrderCount uint64          `json:"order_count"`
 }
 

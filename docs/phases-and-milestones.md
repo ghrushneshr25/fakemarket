@@ -903,7 +903,7 @@ P5.7 Crash Recovery  ✅
 P6.1 Trading Service + gRPC      ✅ CLOSED
 P6.2 Query / Account Service     ✅ CLOSED
 P6.3 Market Data + REST          ✅ CLOSED
-P6.4 Market Data Event Contract  ✅ implemented (CTO gate)
+P6.4 Market Data Event Contract  ✅ CLOSED
 P6.5 WebSocket Streaming         ⏳ NEXT
 P6.6 Market Data Gap Recovery    ⏳
 ```
@@ -998,19 +998,20 @@ P6.6 Market Data Gap Recovery    ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (7 contract points closed) |
 | **Objective** | Define derived MD event envelope/types/sequences for streaming (no WebSocket yet) |
 | **Code** | `internal/marketdata/event` |
 | **ADR** | [0039](./adr/0039-market-data-event-contract.md) |
 
 ### Delivered
 
-1. Envelope: `md_sequence` (per-instrument), `as_of_event_seq` (trading watermark), causation link  
-2. Types: Trade, BestQuote, BookDelta, BookSnapshot, InstrumentStatus, Heartbeat  
-3. JSON Encode/Decode + payload validation (bid/ask ordering on snapshots)  
-4. `StreamCursor` gap/dup/regress detection for consumers  
-5. Privacy: payloads have no account/order IDs  
-6. **Out of scope (kept):** WebSocket, publisher, Kafka, gap recovery service  
+1. Envelope + types + JSON codec + privacy  
+2. **MDSequence:** one event → one seq; multi-event per command = consecutive (`Allocator`)  
+3. Heartbeat + InstrumentStatus **consume** sequence  
+4. BookDelta qty = **absolute** post-update (`0` = remove)  
+5. Snapshot sets cursor to N; next = N+1; gap/dup/regress explicit  
+6. Unknown type/version **fail-closed**  
+7. **Out of scope:** WebSocket, publisher, Kafka, gap recovery service  
 
 ---
 
@@ -1128,4 +1129,4 @@ Next:   P6.4 Market Data Event Contract
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.3 CLOSED. P6.4 Market Data Event Contract in progress.
+**Last updated:** 2026-10-15 — P6.4 CLOSED (MD event contract). Next: P6.5 WebSocket.
