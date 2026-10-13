@@ -904,8 +904,8 @@ P6.1 Trading Service + gRPC      ✅ CLOSED
 P6.2 Query / Account Service     ✅ CLOSED
 P6.3 Market Data + REST          ✅ CLOSED
 P6.4 Market Data Event Contract  ✅ CLOSED
-P6.5 WebSocket Streaming         ✅ CLOSED (19a8861 / ADR 0040)
-P6.6 Market Data Gap Recovery    ⏳ NEXT (last P6 milestone)
+P6.5 WebSocket Streaming         ✅ CLOSED
+P6.6 Market Data Gap Recovery    ✅ implemented (CTO gate, final P6)
 ```
 
 ---
@@ -1133,7 +1133,7 @@ P6.6 Market Data Gap Recovery    ⏳ NEXT (last P6 milestone)
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
-| P6 APIs | 🔧 | P6.1–P6.5 ✅ · **P6.6 Gap Recovery (final P6)** |
+| P6 APIs | 🔧 | P6.1–P6.5 ✅ · P6.6 gap recovery implemented → CTO |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
@@ -1150,4 +1150,4 @@ Next:   P6.4 Market Data Event Contract
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.5 CTO ACCEPTED. Awaiting P6.6 requirements (last P6 milestone).
+**Last updated:** 2026-10-15 — P6.6 gap recovery implemented (ADR 0041). Awaiting CTO accept to close P6.

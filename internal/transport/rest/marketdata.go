@@ -9,14 +9,21 @@ import (
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 )
 
-// MarketDataHandler is the REST adapter for MarketDataService.
+// MarketDataHandler is the REST adapter for MarketDataService (+ optional recovery).
 type MarketDataHandler struct {
 	svc *marketdata.Service
+	rec *marketdata.RecoveryService
 }
 
 // NewMarketDataHandler wraps the transport-independent service.
 func NewMarketDataHandler(svc *marketdata.Service) *MarketDataHandler {
 	return &MarketDataHandler{svc: svc}
+}
+
+// WithRecovery attaches P6.6 snapshot recovery API.
+func (h *MarketDataHandler) WithRecovery(rec *marketdata.RecoveryService) *MarketDataHandler {
+	h.rec = rec
+	return h
 }
 
 // Register mounts market-data routes on mux.
@@ -25,6 +32,7 @@ func (h *MarketDataHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/market-data/{instrument}/book", h.book)
 	mux.HandleFunc("GET /v1/market-data/{instrument}/trades", h.trades)
 	mux.HandleFunc("GET /v1/market-data/{instrument}/status", h.status)
+	mux.HandleFunc("GET /v1/market-data/{instrument}/snapshot", h.snapshot)
 }
 
 func (h *MarketDataHandler) quote(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +91,48 @@ func (h *MarketDataHandler) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, mapStatus(v))
+}
+
+// snapshot is the P6.6 recovery BookSnapshot (full public book + md_sequence).
+func (h *MarketDataHandler) snapshot(w http.ResponseWriter, r *http.Request) {
+	if h.rec == nil {
+		writeError(w, marketdata.ErrNotReady)
+		return
+	}
+	id := domain.InstrumentID(r.PathValue("instrument"))
+	v, err := h.rec.GetBookSnapshot(r.Context(), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, mapRecoverySnapshot(v))
+}
+
+type recoverySnapJSON struct {
+	InstrumentID string      `json:"instrument_id"`
+	MDSequence   uint64      `json:"md_sequence"`
+	AsOfEventSeq uint64      `json:"as_of_event_seq"`
+	Bids         []levelJSON `json:"bids"`
+	Asks         []levelJSON `json:"asks"`
+	Timestamp    string      `json:"timestamp"`
+}
+
+func mapRecoverySnapshot(v marketdata.BookSnapshot) recoverySnapJSON {
+	out := recoverySnapJSON{
+		InstrumentID: string(v.InstrumentID),
+		MDSequence:   uint64(v.MDSequence),
+		AsOfEventSeq: uint64(v.AsOfEventSeq),
+		Bids:         make([]levelJSON, 0, len(v.Bids)),
+		Asks:         make([]levelJSON, 0, len(v.Asks)),
+		Timestamp:    v.Timestamp.UTC().Format(time.RFC3339Nano),
+	}
+	for _, b := range v.Bids {
+		out.Bids = append(out.Bids, mapLevel(b))
+	}
+	for _, a := range v.Asks {
+		out.Asks = append(out.Asks, mapLevel(a))
+	}
+	return out
 }
 
 type levelJSON struct {

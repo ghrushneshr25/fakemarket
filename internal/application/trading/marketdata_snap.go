@@ -123,28 +123,89 @@ func (r *Router) executor(instrumentID domain.InstrumentID) (*InstrumentExecutor
 func (x *InstrumentExecutor) snapshotDepth(depth int) (BookDepthSnap, error) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
+	return x.snapshotDepthLocked(depth), nil
+}
+
+// snapshotDepthLocked copies levels. depth <= 0 means full public book (all levels).
+func (x *InstrumentExecutor) snapshotDepthLocked(depth int) BookDepthSnap {
 	ob := x.engine.Book()
 	out := BookDepthSnap{InstrumentID: x.instrument.ID}
-	if depth <= 0 {
-		return out, nil
+	bids := ob.Bids().Levels()
+	asks := ob.Asks().Levels()
+	limit := depth
+	if limit <= 0 {
+		limit = len(bids)
+		if len(asks) > limit {
+			limit = len(asks)
+		}
+		if limit == 0 {
+			return out
+		}
+		// full book: take all
+		limit = int(^uint(0) >> 1) // max int
 	}
-	for i, lvl := range ob.Bids().Levels() {
-		if i >= depth {
+	for i, lvl := range bids {
+		if i >= limit {
 			break
 		}
 		out.Bids = append(out.Bids, DepthLevelSnap{
 			Price: lvl.Price(), Quantity: lvl.TotalQuantity(), OrderCount: uint64(lvl.Len()),
 		})
 	}
-	for i, lvl := range ob.Asks().Levels() {
-		if i >= depth {
+	for i, lvl := range asks {
+		if i >= limit {
 			break
 		}
 		out.Asks = append(out.Asks, DepthLevelSnap{
 			Price: lvl.Price(), Quantity: lvl.TotalQuantity(), OrderCount: uint64(lvl.Len()),
 		})
 	}
-	return out, nil
+	return out
+}
+
+// RecoveryBookSnap is an atomic public book observation for P6.6 gap recovery.
+type RecoveryBookSnap struct {
+	InstrumentID domain.InstrumentID
+	Bids         []DepthLevelSnap
+	Asks         []DepthLevelSnap
+	Bid          *DepthLevelSnap
+	Ask          *DepthLevelSnap
+}
+
+// SnapshotRecoveryBook copies full public book under one instrument lock (atomic observation).
+func (rm *ReadModel) SnapshotRecoveryBook(instrumentID domain.InstrumentID) (RecoveryBookSnap, error) {
+	if rm == nil || rm.Router == nil {
+		return RecoveryBookSnap{}, ErrInstrumentUnknown
+	}
+	return rm.Router.snapshotRecoveryBook(instrumentID)
+}
+
+func (r *Router) snapshotRecoveryBook(instrumentID domain.InstrumentID) (RecoveryBookSnap, error) {
+	ex, err := r.executor(instrumentID)
+	if err != nil {
+		return RecoveryBookSnap{}, err
+	}
+	return ex.snapshotRecoveryBook(), nil
+}
+
+func (x *InstrumentExecutor) snapshotRecoveryBook() RecoveryBookSnap {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	depth := x.snapshotDepthLocked(0) // full
+	out := RecoveryBookSnap{
+		InstrumentID: depth.InstrumentID,
+		Bids:         depth.Bids,
+		Asks:         depth.Asks,
+	}
+	if len(out.Bids) > 0 {
+		b := out.Bids[0]
+		out.Bid = &b
+	}
+	if len(out.Asks) > 0 {
+		a := out.Asks[0]
+		out.Ask = &a
+	}
+	return out
 }
 
 func (x *InstrumentExecutor) snapshotQuote() (QuoteSnap, error) {

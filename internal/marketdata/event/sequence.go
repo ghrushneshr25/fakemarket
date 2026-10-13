@@ -84,3 +84,66 @@ func IsDup(err error) bool {
 func IsRegress(err error) bool {
 	return errors.Is(err, ErrSequenceRegress)
 }
+
+// IsStale reports duplicate or regression (safe to ignore on live stream / buffer).
+func IsStale(err error) bool {
+	return IsDup(err) || IsRegress(err)
+}
+
+// Expected returns LastSeq+1 (1 if none yet — first event may be any >=1 on fresh cursor).
+func (c StreamCursor) Expected() domain.Sequence {
+	if c.LastSeq == 0 {
+		return 0 // special: any first seq >= 1 accepted
+	}
+	return c.LastSeq + 1
+}
+
+// Reset establishes cursor after a recovery snapshot at sequence N.
+//
+//	Snapshot(N) means book is complete as of MD event N.
+//	Next expected live/buffered event is N+1.
+//
+// Stale rule: if current LastSeq > N, returns ErrSequenceRegress (do not roll back).
+// Idempotent refresh: LastSeq == N is allowed (no-op success).
+func (c StreamCursor) Reset(instrumentID domain.InstrumentID, n domain.Sequence) (StreamCursor, error) {
+	if instrumentID == "" {
+		return c, fmt.Errorf("%w: instrument", ErrInvalidEnvelope)
+	}
+	if n == 0 {
+		return c, fmt.Errorf("%w: snapshot sequence 0", ErrInvalidEnvelope)
+	}
+	if c.InstrumentID != "" && c.InstrumentID != instrumentID {
+		return c, fmt.Errorf("%w: instrument mismatch", ErrInvalidEnvelope)
+	}
+	if c.LastSeq > n {
+		return c, fmt.Errorf("%w: snapshot %d < cursor %d", ErrSequenceRegress, n, c.LastSeq)
+	}
+	return StreamCursor{InstrumentID: instrumentID, LastSeq: n}, nil
+}
+
+// ObserveSeq applies the same rules as Observe but with a bare sequence
+// (used when applying buffered frames or validating without full Event).
+func (c StreamCursor) ObserveSeq(instrumentID domain.InstrumentID, seq domain.Sequence) (StreamCursor, error) {
+	// Build a minimal heartbeat-shaped path via synthetic rules (duplicate Observe logic).
+	if c.InstrumentID != "" && instrumentID != c.InstrumentID {
+		return c, fmt.Errorf("%w: instrument %s != %s", ErrInvalidEnvelope, instrumentID, c.InstrumentID)
+	}
+	id := c.InstrumentID
+	if id == "" {
+		id = instrumentID
+	}
+	if c.LastSeq == 0 {
+		return StreamCursor{InstrumentID: id, LastSeq: seq}, nil
+	}
+	want := c.LastSeq + 1
+	switch {
+	case seq == c.LastSeq:
+		return c, fmt.Errorf("%w: %d", ErrSequenceDup, seq)
+	case seq < c.LastSeq:
+		return c, fmt.Errorf("%w: have %d got %d", ErrSequenceRegress, c.LastSeq, seq)
+	case seq > want:
+		return c, fmt.Errorf("%w: want %d got %d", ErrSequenceGap, want, seq)
+	default:
+		return StreamCursor{InstrumentID: id, LastSeq: seq}, nil
+	}
+}
