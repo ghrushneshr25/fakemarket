@@ -900,12 +900,12 @@ P5.7 Crash Recovery  ✅
 ### Roadmap
 
 ```text
-P6.1 Trading Service + gRPC   ✅ CLOSED (CTO accepted)
-P6.2 Query / Account Service  ✅ CLOSED (CTO accepted)
-P6.3 MD Read Model + REST     ✅ implemented (CTO gate)
-P6.4 MD Event Contract        ⏳ NEXT
-P6.5 WebSocket Streaming      ⏳
-P6.6 MD Gap Recovery          ⏳
+P6.1 Trading Service + gRPC      ✅ CLOSED
+P6.2 Query / Account Service     ✅ CLOSED
+P6.3 Market Data + REST          ✅ CLOSED
+P6.4 Market Data Event Contract  ✅ implemented (CTO gate)
+P6.5 WebSocket Streaming         ⏳ NEXT
+P6.6 Market Data Gap Recovery    ⏳
 ```
 
 ---
@@ -976,7 +976,7 @@ P6.6 MD Gap Recovery          ⏳
 
 | | |
 |--|--|
-| **Status** | 🟢 **ACCEPTED** (closure: race/privacy/order/404·503/Q27–Q50) |
+| **Status** | 🟢 **ACCEPTED / CLOSED** (`fb901b7`) |
 | **Objective** | Public market-data views (quote/depth/trades/status) + REST adapter |
 | **Code** | `internal/application/marketdata`, `internal/transport/rest`, trading MD snapshots |
 | **ADR** | [0038](./adr/0038-market-data-read-model-and-rest.md) |
@@ -991,6 +991,26 @@ P6.6 MD Gap Recovery          ⏳
 6. depth default 20 max 100; trades limit default 50 max 200  
 7. Instrument-level lock for snapshots; no global MD lock  
 8. Concurrent trading + MD race-clean  
+
+---
+
+## P6.4 — Market Data Event Contract
+
+| | |
+|--|--|
+| **Status** | ✅ implemented — pending CTO accept |
+| **Objective** | Define derived MD event envelope/types/sequences for streaming (no WebSocket yet) |
+| **Code** | `internal/marketdata/event` |
+| **ADR** | [0039](./adr/0039-market-data-event-contract.md) |
+
+### Delivered
+
+1. Envelope: `md_sequence` (per-instrument), `as_of_event_seq` (trading watermark), causation link  
+2. Types: Trade, BestQuote, BookDelta, BookSnapshot, InstrumentStatus, Heartbeat  
+3. JSON Encode/Decode + payload validation (bid/ask ordering on snapshots)  
+4. `StreamCursor` gap/dup/regress detection for consumers  
+5. Privacy: payloads have no account/order IDs  
+6. **Out of scope (kept):** WebSocket, publisher, Kafka, gap recovery service  
 
 ---
 
@@ -1091,12 +1111,12 @@ P6.6 MD Gap Recovery          ⏳
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
-| P6 APIs | 🔧 | P6.1–P6.2 ✅ · P6.3 MD implemented → CTO · **P6.4 next** |
+| P6 APIs | 🔧 | P6.1–P6.3 ✅ · **P6.4 MD Event Contract** |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
 Done:   Domain → Book → Match → Risk → WAL → TradingService (P6.1) → QueryService (P6.2)
-Next:   P6.4 MD Event Contract (after P6.3 CTO accept)
+Next:   P6.4 Market Data Event Contract
 ```
 
 ---
@@ -1108,4 +1128,4 @@ Next:   P6.4 MD Event Contract (after P6.3 CTO accept)
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.3 CTO ACCEPTED. Next: P6.4 MD Event Contract.
+**Last updated:** 2026-10-15 — P6.3 CLOSED. P6.4 Market Data Event Contract in progress.

@@ -14,8 +14,8 @@ FakeMarket models order processing, order books, matching, risk, financial state
 Phase 6  — APIs & Market Data
   P6.1 Trading Service + gRPC     ✅ ACCEPTED
   P6.2 Query / Account Service    ✅ ACCEPTED
-  P6.3 MD Read Model + REST       ✅ implemented (CTO gate)
-  P6.4 MD Event Contract          ⏳
+  P6.3 MD Read Model + REST       ✅ ACCEPTED
+  P6.4 MD Event Contract          🔧
 
 Phase 5  — Durability & Recovery  ✅ complete
 Phase 4–0                         ✅ complete
