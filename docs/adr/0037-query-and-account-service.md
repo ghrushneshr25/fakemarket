@@ -1,6 +1,6 @@
 # ADR 0037 — Query / Account Service (P6.2)
 
-**Status:** Accepted  
+**Status:** Accepted (CTO — AsOfSequence observation-watermark contract)  
 **Date:** 2026-10-15  
 **Phase:** P6 — APIs & Market Data  
 **Milestone:** P6.2
@@ -29,14 +29,35 @@ No external DB/Redis/ClickHouse in P6.2.
 
 ### Consistency model
 
-**Point-in-time consistency within a single query request.**
+**Best-effort process-local snapshot with an observation sequence.**
 
-- Each response carries `AsOfSequence` = last allocated authoritative event sequence at read start/end of the snapshot path.
-- Account cash/positions are snapshotted under `AccountRegistry` RLock.
-- Orders/trades are copied under the owning `InstrumentExecutor` lock (brief read of live pointers into value views).
-- Responses are **value views**, never live domain pointers.
+There is **no** common transaction boundary across account, reservation, order, and sequence domains:
 
-`AsOfSequence` identifies the event sequence through which the returned state is valid for reconciliation/debug. It is not a distributed snapshot isolation proof.
+```text
+Account:        AccountRegistry.RLock
+Reservations:   ReservationStore mutex
+Orders/trades:  InstrumentExecutor.x.mu
+Sequence:       EventSeq atomic
+```
+
+Within one domain lock, copies are internally consistent (e.g. cash + positions under one account RLock). Across domains, concurrent trading may advance state between locks.
+
+#### `AsOfSequence` semantics (precise)
+
+```text
+AsOfSequence = global EventSeq.Load() observation/watermark
+               while constructing the response.
+```
+
+| It **is** | It is **not** |
+|-----------|----------------|
+| A reconciliation/debug watermark (“query saw the exchange around seq N”) | A guarantee that every field is exactly state-at-N |
+| Useful after client timeouts / for later MD gap work | MVCC version / serializable snapshot ID |
+| Monotonic with successful command durability | A multi-lock freeze of the whole exchange |
+
+Do **not** advertise “point-in-time at sequence N” or “transactionally consistent GetAccount.”
+
+Responses are **value views**, never live domain pointers.
 
 ### Account ownership
 

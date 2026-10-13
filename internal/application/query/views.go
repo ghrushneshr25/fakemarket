@@ -2,7 +2,11 @@ package query
 
 import "github.com/ghrushneshr25/fakemarket/internal/domain"
 
-// AccountView is an immutable account snapshot for clients.
+// AsOfSequence on all views is a global EventSeq observation watermark:
+// useful for reconciliation/debug, NOT a guarantee that every field is
+// exactly the exchange state at that sequence (ADR 0037).
+
+// AccountView is an immutable account view for clients.
 type AccountView struct {
 	AccountID     domain.AccountID
 	Currency      domain.Currency
@@ -10,7 +14,7 @@ type AccountView struct {
 	ReservedCash  domain.Money
 	AvailableCash domain.Money
 	Positions     []PositionView
-	OpenOrders    int
+	OpenOrders    int // best-effort; may move vs cash under concurrent fills
 	AsOfSequence  domain.Sequence
 }
 

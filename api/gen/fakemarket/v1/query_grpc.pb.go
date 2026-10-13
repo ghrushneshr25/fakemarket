@@ -33,7 +33,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // QueryService is the read-only gRPC surface (P6.2).
-// No mutations. WAL remains SoT; responses are views with as_of_sequence.
+// No mutations. WAL remains SoT.
+// as_of_sequence is an EventSeq observation watermark, not a multi-domain
+// snapshot version (see ADR 0037).
 type QueryServiceClient interface {
 	GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*GetAccountResponse, error)
 	GetOrder(ctx context.Context, in *GetOrderRequest, opts ...grpc.CallOption) (*GetOrderResponse, error)
@@ -127,7 +129,9 @@ func (c *queryServiceClient) ListReservations(ctx context.Context, in *ListReser
 // for forward compatibility.
 //
 // QueryService is the read-only gRPC surface (P6.2).
-// No mutations. WAL remains SoT; responses are views with as_of_sequence.
+// No mutations. WAL remains SoT.
+// as_of_sequence is an EventSeq observation watermark, not a multi-domain
+// snapshot version (see ADR 0037).
 type QueryServiceServer interface {
 	GetAccount(context.Context, *GetAccountRequest) (*GetAccountResponse, error)
 	GetOrder(context.Context, *GetOrderRequest) (*GetOrderResponse, error)

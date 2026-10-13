@@ -901,7 +901,7 @@ P5.7 Crash Recovery  ✅
 
 ```text
 P6.1 Trading Service + gRPC   ✅ CLOSED (CTO accepted)
-P6.2 Query / Account Service  ✅ implemented (CTO gate)
+P6.2 Query / Account Service  ✅ CLOSED (CTO accepted)
 P6.3 MD Read Model + REST     ⏳ NEXT
 P6.4 MD Event Contract        ⏳
 P6.5 WebSocket Streaming      ⏳
@@ -954,7 +954,7 @@ P6.6 MD Gap Recovery          ⏳
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (AsOfSequence = observation watermark; ADR 0037) |
 | **Objective** | Transport-independent read-only query/account views |
 | **Code** | `internal/application/query`, `internal/transport/grpc` (QueryServer), `api/proto/.../query.proto` |
 | **ADR** | [0037](./adr/0037-query-and-account-service.md) |
@@ -963,7 +963,7 @@ P6.6 MD Gap Recovery          ⏳
 
 1. `QueryService` separate from `TradingService` — no gRPC/HTTP/proto in application  
 2. GetAccount / GetOrder / ListOrders / GetPosition / ListPositions / ListTrades / ListReservations  
-3. Immutable views + `AsOfSequence`; WAL remains SoT  
+3. Immutable views + `AsOfSequence` (**observation watermark**, not SI snapshot ID); WAL remains SoT  
 4. Account ownership isolation (no cross-account order leak)  
 5. Deterministic pagination (opaque token, max page size)  
 6. Read-only: no book/account/reservation/WAL mutation from query path  
@@ -1086,4 +1086,4 @@ Next:   P6.3 MD Read Model + REST (after P6.2 CTO accept)
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.2 implemented (`2fe71fe`); CTO review package in `docs/reviews/p6.2-cto-review-package.md`. Interview Q1–Q60 in `.help/interview.md`.
+**Last updated:** 2026-10-15 — P6.2 CTO ACCEPTED (AsOfSequence contract clarified). Next: P6.3 MD Read Model + REST.

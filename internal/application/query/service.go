@@ -12,6 +12,10 @@ import (
 
 // Service is the transport-independent read-only query boundary.
 // It never mutates exchange state, never appends WAL, never calls TradingService mutations.
+//
+// Consistency: best-effort process-local snapshot with an observation sequence.
+// AsOfSequence is EventSeq.Load() watermark — not a multi-domain snapshot version.
+// See ADR 0037.
 type Service struct {
 	read  *trading.ReadModel
 	ready atomic.Bool
@@ -40,11 +44,12 @@ func (s *Service) check(ctx context.Context) error {
 	return nil
 }
 
+// asOf returns the global event-sequence observation watermark (not a SI version).
 func (s *Service) asOf() domain.Sequence {
 	return s.read.LastSequence()
 }
 
-// GetAccount returns a point-in-time account view (AsOfSequence).
+// GetAccount returns an account view with observation AsOfSequence (ADR 0037).
 func (s *Service) GetAccount(ctx context.Context, q GetAccountQuery) (AccountView, error) {
 	if err := s.check(ctx); err != nil {
 		return AccountView{}, err

@@ -52,7 +52,8 @@ type ReadModel struct {
 	EventSeq *atomic.Uint64
 }
 
-// LastSequence is the last allocated authoritative event sequence (AsOfSequence source).
+// LastSequence is the last allocated authoritative event sequence.
+// Query uses this as AsOfSequence observation watermark (not a SI snapshot ID).
 func (rm *ReadModel) LastSequence() domain.Sequence {
 	if rm == nil || rm.EventSeq == nil {
 		return 0

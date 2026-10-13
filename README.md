@@ -24,7 +24,7 @@ What exists today:
 
 - Kernel + durability + **TradingService** + **QueryService** (direct Go) + gRPC adapters
 - CommandBatch WAL atomicity; per-instrument concurrency lanes (P6.1-C1)
-- Read-only account/order/position/trade/reservation views with `AsOfSequence`
+- Read-only account/order/position/trade/reservation views with `AsOfSequence` (observation watermark)
 
 What does **not** exist yet (by design):
 

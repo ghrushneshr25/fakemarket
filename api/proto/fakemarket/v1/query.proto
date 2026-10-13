@@ -7,7 +7,9 @@ option go_package = "github.com/ghrushneshr25/fakemarket/api/gen/fakemarket/v1;f
 import "fakemarket/v1/trading.proto";
 
 // QueryService is the read-only gRPC surface (P6.2).
-// No mutations. WAL remains SoT; responses are views with as_of_sequence.
+// No mutations. WAL remains SoT.
+// as_of_sequence is an EventSeq observation watermark, not a multi-domain
+// snapshot version (see ADR 0037).
 service QueryService {
   rpc GetAccount(GetAccountRequest) returns (GetAccountResponse);
   rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
