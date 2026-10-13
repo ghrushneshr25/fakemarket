@@ -904,8 +904,8 @@ P6.1 Trading Service + gRPC      ✅ CLOSED
 P6.2 Query / Account Service     ✅ CLOSED
 P6.3 Market Data + REST          ✅ CLOSED
 P6.4 Market Data Event Contract  ✅ CLOSED
-P6.5 WebSocket Streaming         ⏳ NEXT
-P6.6 Market Data Gap Recovery    ⏳
+P6.5 WebSocket Streaming         ✅ implemented (CTO gate)
+P6.6 Market Data Gap Recovery    ⏳ NEXT
 ```
 
 ---
@@ -1015,6 +1015,27 @@ P6.6 Market Data Gap Recovery    ⏳
 
 ---
 
+## P6.5 — WebSocket Market Data
+
+| | |
+|--|--|
+| **Status** | ✅ implemented — pending CTO accept |
+| **Objective** | Transport P6.4 MD events over WebSocket without blocking trading |
+| **Code** | `internal/application/marketdata` (Hub), `internal/transport/ws` |
+| **ADR** | [0040](./adr/0040-market-data-websocket.md) |
+
+### Delivered
+
+1. `GET /v1/market-data/ws` upgrade  
+2. subscribe / unsubscribe (atomic instrument validation)  
+3. Hub.Publish → bounded per-client queue → writer goroutine  
+4. Slow client = disconnect (no silent drop)  
+5. P6.4 `mdevent.Encode` reused; MDSequence / AsOfEventSeq preserved  
+6. Isolation, ordering, race, slow-client tests  
+7. **Out of scope:** gap recovery (P6.6), auth redesign  
+
+---
+
 # P7 — Performance & Observability
 
 ### Phase requirements (PRD)
@@ -1112,7 +1133,7 @@ P6.6 Market Data Gap Recovery    ⏳
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
-| P6 APIs | 🔧 | P6.1–P6.3 ✅ · **P6.4 MD Event Contract** |
+| P6 APIs | 🔧 | P6.1–P6.4 ✅ · P6.5 WS implemented → CTO · **P6.6 next** |
 | P7–P10 | ⏳ | Per PRD |
 
 ```text
@@ -1129,4 +1150,4 @@ Next:   P6.4 Market Data Event Contract
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.4 CLOSED (MD event contract). Next: P6.5 WebSocket.
+**Last updated:** 2026-10-15 — P6.5 WebSocket implemented (ADR 0040). Awaiting CTO accept.

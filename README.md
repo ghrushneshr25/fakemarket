@@ -15,7 +15,9 @@ Phase 6  — APIs & Market Data
   P6.1 Trading Service + gRPC     ✅ ACCEPTED
   P6.2 Query / Account Service    ✅ ACCEPTED
   P6.3 MD Read Model + REST       ✅ ACCEPTED
-  P6.4 MD Event Contract          🔧
+  P6.4 MD Event Contract          ✅ ACCEPTED
+  P6.5 WebSocket MD               ✅ implemented (CTO gate)
+  P6.6 MD Gap Recovery            ⏳
 
 Phase 5  — Durability & Recovery  ✅ complete
 Phase 4–0                         ✅ complete
