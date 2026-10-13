@@ -46,8 +46,12 @@ func (c *client) Instruments() []domain.InstrumentID {
 }
 
 // Enqueue implements marketdata.Subscriber.
-// If not subscribed to instrument, returns true (no-op success).
-// If subscribed: non-blocking send; false if full or closed.
+// If not subscribed to instrument, returns true (no-op success) — live sub model:
+// events before subscribe are not replayed.
+// If subscribed: non-blocking send of an owned copy; false if full or closed.
+// Race-safe with Close: closed is checked first; send never happens after Close
+// sets closed (Close does not close the channel while Publish may still run —
+// it sets closed then closes the conn; failed/closed Enqueue returns false).
 func (c *client) Enqueue(instrumentID domain.InstrumentID, frame []byte) bool {
 	if c.closed.Load() {
 		return false
@@ -58,9 +62,12 @@ func (c *client) Enqueue(instrumentID domain.InstrumentID, frame []byte) bool {
 	if !sub {
 		return true
 	}
-	// copy frame so publisher can reuse buffers later
+	// Immutable frame ownership: always copy (Hub may share encode buffer across clients).
 	cp := make([]byte, len(frame))
 	copy(cp, frame)
+	if c.closed.Load() {
+		return false
+	}
 	select {
 	case c.send <- cp:
 		return true
@@ -69,16 +76,17 @@ func (c *client) Enqueue(instrumentID domain.InstrumentID, frame []byte) bool {
 	}
 }
 
+// Close is idempotent. Marks closed before tearing down so concurrent Enqueue fails fast.
 func (c *client) Close() {
 	if c.closed.Swap(true) {
 		return
 	}
-	// Unblock writer
+	_ = c.conn.Close()
+	// Unblock writePump if waiting on send (best-effort poison).
 	select {
-	case c.send <- nil: // poison optional
+	case c.send <- nil:
 	default:
 	}
-	_ = c.conn.Close()
 }
 
 func (c *client) subscribe(ids []domain.InstrumentID) {
@@ -107,15 +115,16 @@ func (c *client) unsubscribe(ids []domain.InstrumentID) {
 	// unsubscribe stops NEW delivery; already-queued frames may still send.
 }
 
+// writePump is the sole owner of conn writes for this client.
+// Transport Ping (not md.Heartbeat) detects dead peers via write deadline failure.
 func (c *client) writePump() {
 	defer c.Close()
-	// Application MD heartbeats come as events; transport ping keeps TCP alive.
 	ping := time.NewTicker(30 * time.Second)
 	defer ping.Stop()
 	for {
 		select {
 		case frame, ok := <-c.send:
-			if !ok || frame == nil {
+			if !ok || frame == nil || c.closed.Load() {
 				return
 			}
 			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
@@ -123,9 +132,13 @@ func (c *client) writePump() {
 				return
 			}
 		case <-ping.C:
+			if c.closed.Load() {
+				return
+			}
+			// Transport liveness (independent of MDSequence / md.Heartbeat).
 			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
+				return // unresponsive / dead connection
 			}
 		}
 	}
@@ -137,6 +150,7 @@ func (c *client) readPump() {
 		c.Close()
 	}()
 	c.conn.SetReadLimit(64 << 10)
+	// Pong timeout: if no read/pong within 60s, ReadMessage fails → disconnect.
 	_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))

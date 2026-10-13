@@ -8,18 +8,24 @@ import (
 	mdevent "github.com/ghrushneshr25/fakemarket/internal/marketdata/event"
 )
 
-// DefaultClientQueue is the bounded outbound buffer per WebSocket client.
+// DefaultClientQueue is the bounded outbound buffer per WebSocket client,
+// measured in **encoded event frames** (not bytes).
+//
+// It is an implementation limit for slow-client detection — not a guarantee
+// of how many events any client will receive.
 const DefaultClientQueue = 256
 
 // Subscriber receives already-encoded MD event frames for one connection.
 // Transport adapters implement this; the hub never writes sockets directly.
 type Subscriber interface {
 	// Enqueue attempts to queue an encoded frame for instrument.
-	// Returns false if the client cannot accept (full/closed) — hub will Drop.
+	// Returns false if the client cannot accept (full/closed) — hub will Close.
+	// Must treat frame as immutable read-only bytes (copy if retaining).
 	Enqueue(instrumentID domain.InstrumentID, frame []byte) bool
 	// Instruments returns current subscription set (copy).
 	Instruments() []domain.InstrumentID
 	// Close signals the subscriber to disconnect (slow client / shutdown).
+	// Must be idempotent and race-safe with Enqueue/Publish.
 	Close()
 	// ID for metrics/logging.
 	ID() string
@@ -37,8 +43,25 @@ type PublisherMetrics struct {
 	ClientsDisconnected atomic.Int64
 }
 
-// Hub fans out P6.4 MD events to subscribers without blocking the caller long-term.
-// Publish only enqueues; WebSocket writers live outside the trading path.
+// Hub fans out P6.4 MD events to subscribers without blocking the trading path.
+//
+// Ordering contract:
+//   - Hub does NOT invent MDSequence (P6.4 owns sequencing).
+//   - Upstream MUST Publish events for a given InstrumentID in MDSequence order
+//     (single producer / serialized caller per instrument). Concurrent Publish
+//     on the same instrument is not a supported ordering model.
+//   - Per-instrument lock makes each Publish's fan-out atomic (no torn multi-client
+//     delivery of one event) and FIFO-enqueues onto each client channel.
+//   - Concurrent Publish for different instruments may interleave freely.
+//   - Client queues are FIFO: enqueue order == send order for that client.
+//
+// Encode-once: mdevent.Encode runs once per Publish; the resulting []byte is
+// treated as immutable. Each Subscriber.Enqueue must copy if it retains the
+// buffer (ws client copies).
+//
+// Live subscription: events published before a successful subscribe are not
+// replayed. Unsubscribe stops NEW delivery; already-queued frames may still
+// drain (no purge — avoids inventing sequence gaps).
 type Hub struct {
 	mu       sync.RWMutex
 	subs     map[Subscriber]struct{}
@@ -46,6 +69,9 @@ type Hub struct {
 	ready    atomic.Bool
 	queueCap int
 	Metrics  PublisherMetrics
+
+	// per-instrument publish serialization (preserve enqueue order)
+	instMu sync.Map // InstrumentID → *sync.Mutex
 }
 
 // NewHub constructs a publisher hub.
@@ -65,13 +91,13 @@ func NewHub(known []domain.InstrumentID, queueCap int) *Hub {
 	return h
 }
 
-// SetReady controls admission of new connections/subscriptions.
+// SetReady controls admission of new connections/subscriptions (same readiness boundary as P6.3).
 func (h *Hub) SetReady(v bool) { h.ready.Store(v) }
 
 // Ready reports hub admission state.
 func (h *Hub) Ready() bool { return h.ready.Load() }
 
-// QueueCap returns per-client outbound capacity.
+// QueueCap returns per-client outbound capacity in event frames.
 func (h *Hub) QueueCap() int { return h.queueCap }
 
 // KnownInstrument reports whether instrument is registered for MD.
@@ -89,7 +115,7 @@ func (h *Hub) RegisterInstrument(id domain.InstrumentID) {
 	h.known[id] = struct{}{}
 }
 
-// AddSubscriber registers a client connection.
+// AddSubscriber registers a client connection (starts with empty subscriptions).
 func (h *Hub) AddSubscriber(s Subscriber) {
 	h.mu.Lock()
 	h.subs[s] = struct{}{}
@@ -134,13 +160,25 @@ func (h *Hub) ValidateSubscribe(instruments []domain.InstrumentID) error {
 	return nil
 }
 
+func (h *Hub) lockInstrument(id domain.InstrumentID) *sync.Mutex {
+	v, _ := h.instMu.LoadOrStore(id, &sync.Mutex{})
+	return v.(*sync.Mutex)
+}
+
 // Publish encodes a P6.4 event once and fans out to matching subscribers.
 // Never blocks on slow clients: full queue → Close subscriber.
+// Per-instrument mutex preserves enqueue order for that instrument.
 func (h *Hub) Publish(ev mdevent.Event) error {
+	inst := ev.InstrumentID()
+	mu := h.lockInstrument(inst)
+	mu.Lock()
+	defer mu.Unlock()
+
 	frame, err := mdevent.Encode(ev)
 	if err != nil {
 		return err
 	}
+	// frame is immutable from here; subscribers must copy if they retain it.
 	h.Metrics.EventsPublished.Add(1)
 
 	h.mu.RLock()
@@ -150,7 +188,6 @@ func (h *Hub) Publish(ev mdevent.Event) error {
 	}
 	h.mu.RUnlock()
 
-	inst := ev.InstrumentID()
 	var slow []Subscriber
 	for _, s := range list {
 		ok := s.Enqueue(inst, frame)
@@ -158,8 +195,6 @@ func (h *Hub) Publish(ev mdevent.Event) error {
 			h.Metrics.EventsEnqueued.Add(1)
 			continue
 		}
-		// Not subscribed to this instrument → Enqueue returns true without queueing,
-		// OR queue full / closed. Distinguish via re-check: if subscribed and fail → slow.
 		subs := s.Instruments()
 		want := false
 		for _, id := range subs {
@@ -169,9 +204,8 @@ func (h *Hub) Publish(ev mdevent.Event) error {
 			}
 		}
 		if !want {
-			continue // not subscribed — Enqueue no-op success path should return true
+			continue
 		}
-		// subscribed but failed → slow or closed
 		h.Metrics.QueueFull.Add(1)
 		h.Metrics.SlowClientDrops.Add(1)
 		slow = append(slow, s)
@@ -183,7 +217,9 @@ func (h *Hub) Publish(ev mdevent.Event) error {
 }
 
 // CloseAll disconnects every subscriber (graceful shutdown).
+// Stops fan-out membership; callers should SetReady(false) first to reject new work.
 func (h *Hub) CloseAll() {
+	h.SetReady(false)
 	h.mu.Lock()
 	list := make([]Subscriber, 0, len(h.subs))
 	for s := range h.subs {
