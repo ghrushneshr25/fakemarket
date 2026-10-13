@@ -11,29 +11,23 @@ FakeMarket models order processing, order books, matching, risk, financial state
 ## Current status
 
 ```text
-Phase 6  — APIs & Market Data
-  P6.1 Trading Service + gRPC     ✅ ACCEPTED
-  P6.2 Query / Account Service    ✅ ACCEPTED
-  P6.3 MD Read Model + REST       ✅ ACCEPTED
-  P6.4 MD Event Contract          ✅ ACCEPTED
-  P6.5 WebSocket MD               ✅ ACCEPTED
-  P6.6 MD Gap Recovery            ⏳ NEXT (closes P6)
-
-Phase 5  — Durability & Recovery  ✅ complete
-Phase 4–0                         ✅ complete
+Phase 6  — APIs & Market Data     🟢 COMPLETE (P6.1–P6.6)
+Phase 7  — Performance & Observability  ⏳ NEXT (measurement-first)
+Phase 5  — Durability & Recovery  ✅
+Phase 4–0                         ✅
 ```
 
 What exists today:
 
-- Kernel + durability + **TradingService** + **QueryService** + **MarketDataService**
-- gRPC (trading/query) + REST (market data: quote/book/trades/status)
-- CommandBatch WAL; per-instrument lanes; AsOfSequence observation watermark
+- Full exchange kernel: domain → book → match → risk → WAL/recovery
+- **TradingService** + gRPC · **QueryService** + gRPC · **MarketData** REST + WebSocket
+- CommandBatch WAL · per-instrument concurrency · MD event contract · gap recovery (Option B)
 
 What does **not** exist yet (by design):
 
-- WebSocket/streaming MD, gap recovery, external MD DB
+- P7 formal metrics/benchmarks/optimizations (no premature hot-path tuning)
 - Concurrent multi-instrument mutation of the same account (deferred ownership model)
-### Progress & requirements
+- External MD DB / Kafka### Progress & requirements
 
 See **[docs/phases-and-milestones.md](docs/phases-and-milestones.md)** for:
 

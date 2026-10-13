@@ -1,6 +1,6 @@
 # ADR 0041 — Market Data Gap Recovery (P6.6)
 
-**Status:** Accepted  
+**Status:** Accepted / CLOSED (CTO — P6 complete)  
 **Date:** 2026-10-15  
 **Phase:** P6 — APIs & Market Data  
 **Milestone:** P6.6 (final P6)

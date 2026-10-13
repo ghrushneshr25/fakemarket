@@ -895,7 +895,7 @@ P5.7 Crash Recovery  ✅
 | P6.6 | Authn/authz, rate limits, payload limits, timeouts, idempotency |
 | P6.7 | Matching engine independent of HTTP |
 
-### Phase status: 🔧 In progress (next: P6.4 after P6.3 CTO)
+### Phase status: 🟢 **CLOSED** (CTO accepted — all P6.1–P6.6)
 
 ### Roadmap
 
@@ -905,7 +905,10 @@ P6.2 Query / Account Service     ✅ CLOSED
 P6.3 Market Data + REST          ✅ CLOSED
 P6.4 Market Data Event Contract  ✅ CLOSED
 P6.5 WebSocket Streaming         ✅ CLOSED
-P6.6 Market Data Gap Recovery    ✅ implemented (CTO gate, final P6)
+P6.6 Market Data Gap Recovery    ✅ CLOSED (16de1f4 / ADR 0041)
+────────────────────────────────
+P6 APIs & Market Data            🟢 COMPLETE
+Next phase: P7 Performance & Observability
 ```
 
 ---
@@ -1047,7 +1050,19 @@ P6.6 Market Data Gap Recovery    ✅ implemented (CTO gate, final P6)
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: ⏳
+### Phase status: ⏳ **NEXT**
+
+### CTO stance (before implementation)
+
+```text
+P7 is measurement-first.
+Do NOT start hot-path engine optimization yet.
+
+1. Establish metrics + observability
+2. Establish reproducible benchmark methodology
+3. Identify actual bottlenecks with data
+4. Only then optimize with evidence (P7.4)
+```
 
 ---
 
@@ -1133,12 +1148,13 @@ P6.6 Market Data Gap Recovery    ✅ implemented (CTO gate, final P6)
 | P3 Matching | ✅ | Closed — next P4 |
 | P4 Risk | ✅ | CLOSED |
 | P5 WAL | ✅ | P5.1–P5.7 CLOSED |
-| P6 APIs | 🔧 | P6.1–P6.5 ✅ · P6.6 gap recovery implemented → CTO |
-| P7–P10 | ⏳ | Per PRD |
+| P6 APIs | 🟢 **CLOSED** | P6.1–P6.6 complete |
+| P7 Perf | ⏳ **NEXT** | Measurement first — no premature optimization |
+| P8–P10 | ⏳ | Per PRD |
 
 ```text
-Done:   Domain → Book → Match → Risk → WAL → TradingService (P6.1) → QueryService (P6.2)
-Next:   P6.4 Market Data Event Contract
+Done:   P0–P5 kernel/durability + P6 APIs & Market Data (complete)
+Next:   P7 Performance & Observability (metrics → benches → evidence-based opts)
 ```
 
 ---
@@ -1150,4 +1166,4 @@ Next:   P6.4 Market Data Event Contract
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P6.6 gap recovery implemented (ADR 0041). Awaiting CTO accept to close P6.
+**Last updated:** 2026-10-15 — **P6 COMPLETE** (CTO). Next: P7 Performance & Observability (measurement-first).
