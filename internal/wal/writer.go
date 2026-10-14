@@ -151,9 +151,10 @@ type Writer struct {
 	closed  bool
 	faulted bool
 
-	// group commit state (only when GroupCommitMax > 1 && SyncOnAppend)
+	// group commit state (SyncOnAppend path)
 	pending  []*gcItem
 	gcLeader bool
+	holeWait int // consecutive empty-prefix spins; safety valve
 
 	onAppend func(ok bool, n int, d time.Duration)
 }
@@ -280,7 +281,9 @@ func (w *Writer) Append(ev event.Event) error {
 		err = fmt.Errorf("%w: sequence 0", ErrInvalidEvent)
 		return err
 	}
-	useGroup := w.cfg.SyncOnAppend && w.cfg.GroupCommitMax > 1
+	// Group path whenever SyncOnAppend: supports out-of-order enqueue after
+	// journalMu-only seq assign. GroupCommitMax=1 ⇒ one event per fsync (legacy cost).
+	useGroup := w.cfg.SyncOnAppend
 	if useGroup {
 		if err = w.checkSequenceGroup(seq); err != nil {
 			w.mu.Unlock()
@@ -395,12 +398,30 @@ func (w *Writer) Append(ev event.Event) error {
 				err = item.err
 				return err
 			default:
+				// Safety: if we are blocked on a hole with nothing lower possible in-process,
+				// fail rather than spin forever (should not happen with journalMu seq assign).
+				if w.holeWait > 200 {
+					err = fmt.Errorf("%w: waiting for seq %d with pending min ahead", ErrSequenceGap, w.lastSequence+1)
+					w.failAllPendingLocked()
+					// re-fail our item if removed
+					select {
+					case <-item.done:
+					default:
+						item.err = err
+						close(item.done)
+					}
+					w.gcLeader = false
+					w.mu.Unlock()
+					return err
+				}
+				w.holeWait++
 				w.mu.Unlock()
 				runtime.Gosched()
 				time.Sleep(50 * time.Microsecond)
 				continue
 			}
 		}
+		w.holeWait = 0
 
 		w.removeFromPending(prefix)
 		_ = w.flushBatchLocked(prefix)
@@ -601,7 +622,8 @@ func (w *Writer) checkSequence(seq uint64) error {
 	return fmt.Errorf("%w: last=%d got=%d want=%d", ErrSequenceGap, w.lastSequence, seq, want)
 }
 
-// checkSequenceGroup allows out-of-order enqueue (seq assigned under journalMu before Append).
+// checkSequenceGroup allows out-of-order enqueue within GroupCommitMax of the
+// durable tip (seq assigned under journalMu before concurrent Append).
 // Flush still requires a contiguous prefix from lastSequence+1.
 func (w *Writer) checkSequenceGroup(seq uint64) error {
 	if seq == 0 {
@@ -615,6 +637,15 @@ func (w *Writer) checkSequenceGroup(seq uint64) error {
 	}
 	if w.seqPending(seq) {
 		return fmt.Errorf("%w: %d", ErrSequenceDuplicate, seq)
+	}
+	// Reorder window ≥ flush batch size so Max=1 (legacy fsync rate) still accepts
+	// concurrent journalMu-assigned sequences. Far-future gaps still rejected.
+	maxAhead := uint64(w.cfg.GroupCommitMax)
+	if maxAhead < 64 {
+		maxAhead = 64
+	}
+	if seq > w.lastSequence+maxAhead {
+		return fmt.Errorf("%w: last=%d got=%d maxAhead=%d", ErrSequenceGap, w.lastSequence, seq, maxAhead)
 	}
 	return nil
 }

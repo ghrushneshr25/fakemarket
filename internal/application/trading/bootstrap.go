@@ -3,6 +3,7 @@ package trading
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -52,13 +53,17 @@ func BootstrapMulti(
 		return nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
 	}
 	mreg := metrics.New()
+	// P7.6 O1 defaults; WAL_GROUP_COMMIT=off|0|1 → legacy one-sync-per-Append (A/B).
+	gcMax, gcWait := 32, 100*time.Microsecond
+	switch os.Getenv("WAL_GROUP_COMMIT") {
+	case "0", "off", "1", "legacy":
+		gcMax, gcWait = 1, 0
+	}
 	w, err := wal.Open(wal.Config{
 		Dir: walDir, SyncOnAppend: true,
-		// P7.6 O1: concurrent Append callers may share one fsync; each still
-		// blocks until durable. Short wait lets multi-instrument peers join a batch
-		// without material sequential cost vs ~ms fsync.
-		GroupCommitMax:  32,
-		GroupCommitWait: 100 * time.Microsecond,
+		// Concurrent Append callers may share one fsync; each still blocks until durable.
+		GroupCommitMax:  gcMax,
+		GroupCommitWait: gcWait,
 		OnAppend:        func(ok bool, n int, d time.Duration) { mreg.ObserveWAL(ok, n, d) },
 	})
 	if err != nil {

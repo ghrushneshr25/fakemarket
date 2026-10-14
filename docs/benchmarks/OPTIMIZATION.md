@@ -2,23 +2,34 @@
 
 > Every change must improve the **P7.4 benchmark** (or be rejected) without weakening correctness, determinism, or durability (`SyncOnAppend=true`).
 
+**Commits:** `0428133` (+ evidence follow-up)  
+**ADR:** 0048  
+**Machine (illustrative):** darwin/arm64, Go 1.25.x, GOMAXPROCS=10 — **not an SLA**
+
 ## Baseline methodology
 
 ```text
 path: direct Go Service
 seed: 42
 WAL: SyncOnAppend=true
-compare: same scenario / workers / N / GOMAXPROCS / machine class
-reps: bench -count≥2; scale tests logged
+compare: identical scenario / N / workers / GOMAXPROCS
+reps: bench -count=3; O1 A/B -count=5
+A/B flag: WAL_GROUP_COMMIT=off → GroupCommitMax=1 (legacy cost, still OO-safe queue)
 ```
-
-Commands:
 
 ```bash
 make check
 go test -race ./internal/wal/ ./internal/application/trading/ ./internal/matching/
-go test ./internal/bench/ -bench='BenchmarkNoMatch|BenchmarkFullMatch|BenchmarkMixed|BenchmarkHotInstrument' -benchmem -count=2
+
+# O3-relevant
+go test ./internal/bench/ -bench='BenchmarkFullMatch$|BenchmarkMixed$' -benchmem -benchtime=400ms -count=3
+
+# O1-relevant (shared WAL, 8 instruments, 1 worker each)
+WAL_GROUP_COMMIT=off go test ./internal/bench/ -run O1_SharedWAL -count=5 -v
+go test ./internal/bench/ -run O1_SharedWAL -count=5 -v
 ```
+
+**Note:** Two separate harnesses (each own WAL) cannot exercise group commit. Use `TestO1_SharedWAL_MultiInstrument` (`BootstrapMulti`).
 
 ---
 
@@ -26,93 +37,125 @@ go test ./internal/bench/ -bench='BenchmarkNoMatch|BenchmarkFullMatch|BenchmarkM
 
 | | |
 |--|--|
-| **P7.5 finding** | F3 — `GeneratedTrades` ~91–97% alloc_space (full-history copy × up to 3/submit) |
-| **Hypothesis** | Copy only `trades[cursor:]` once per submit; `TradeCount()` for length |
-| **Implementation** | `Engine.TradeCount`, `GeneratedTradesFrom(from)`; journal uses one delta copy |
-| **Correctness** | Defensive copy retained; replay/settlement unchanged; unit test alias-free |
-| **Durability** | Unchanged |
-| **Evidence** | Full-history copy removed from hot path; `make check` + race green |
-| **Wall impact** | Under SyncWAL, sequential wall still ~WAL-bound (as F3 predicted **inconclusive** wall). Alloc path no longer O(total trades) per command. |
-| **Decision** | **ACCEPT** — correctness-safe; complexity low; prevents alloc blow-up as trade history grows |
+| **P7.5** | F3 — full-history copy × up to 3/submit |
+| **Change** | `TradeCount` + `GeneratedTradesFrom(cursor)`; journal one delta copy |
+| **Gate** | Correctness + alloc/copy behavior (P99 wall **not** required) |
+
+### Before/after (`1cda968` → `0428133`)
+
+| Bench | Metric | Pre (1cda968) | Post (0428133) | Delta |
+|-------|--------|--------------:|---------------:|------:|
+| FullMatch | B/op | **~109,000** | **~16,700** | **−85%** |
+| FullMatch | allocs/op | ~109 | ~108 | ~flat |
+| FullMatch | ns/op | ~7.55ms | ~7.55ms | ~flat (WAL-bound) |
+| Mixed | B/op | **~36,000** | **~10,600** | **−70%** |
+| Mixed | allocs/op | ~80 | ~79 | ~flat |
+| NoMatch | B/op | ~6.7K | ~6.5K | ~flat (no trade copies) |
+
+**Decision: ACCEPT** — eliminates O(n trades) copy blow-up; no pathological regression; wall unchanged under SyncWAL as predicted.
 
 ---
 
-## O2 — Work under `InstrumentExecutor.x.mu`  ✅ ACCEPT (narrow) / ⛔ REJECT (mutex removal)
+## O2 — Work under `x.mu`  ✅ ACCEPT (narrow) / ⛔ REJECT (broad)
 
 | | |
 |--|--|
-| **P7.5 finding** | F2 — block ~87% on `Mutex.Lock` → Submit; fsync held under lock |
-| **Hypothesis A** | Reduce work under lock via O3 (fewer copies while holding `x.mu`) |
-| **Hypothesis B** | Remove mutex / unlock across fsync |
-| **Implementation** | A: O3 only. B: **not implemented** |
-| **Why B rejected** | Single-writer ordering + match-then-durable atomicity; unlocking across fsync risks interleaved match before durable commit without a full durability queue redesign |
-| **Decision** | **ACCEPT A** (with O3). **REJECT B** (mutex removal / naive unlock-around-fsync) |
+| **P7.5** | F2 — mutex block on Submit |
+| **ACCEPT** | O3 reduces copy work while holding `x.mu` |
+| **REJECT** | Mutex removal; unlock-across-fsync without durability queue |
+
+Hot-instrument ns/op remains ~3.8ms (fsync under lock) — **expected**, not a P7.6 failure.
 
 ---
 
-## O1 — WAL durability path (group commit)  ✅ ACCEPT
+## O1 — WAL group commit  ✅ ACCEPT
 
 | | |
 |--|--|
-| **P7.5 finding** | F1 — sequential wall ≈ `wal.Append` → Flush/Sync |
-| **Hypothesis** | Concurrent Append callers share one fsync; each still blocks until its event is in the durable batch |
-| **Implementation** | `Config.GroupCommitMax` / `GroupCommitWait`; contiguous-prefix flush (out-of-order enqueue OK); `journalMu` only for seq assign + batch build; Append outside `journalMu`; skip redundant Flush when Sync (Sync flushes) |
-| **Bootstrap** | `GroupCommitMax=32`, `GroupCommitWait=100µs`, `SyncOnAppend=true` |
-| **Contract** | `Append()==nil` ⇒ event durable (in synced batch). No async “ack before disk.” |
-| **Crash** | Sequences advance only after successful batch Sync; fault on failure; recovery unchanged |
-| **Evidence** | `TestWriter_GroupCommitConcurrent`: **16 appends → 2 syncs** (header + batch). Existing WAL/recovery/trading tests pass. |
-| **Benchmark** | Sequential no-match still ~250 cmd/s / ~4ms p50 (WAL-bound; group wait ≪ fsync). Multi-instrument concurrent Append can coalesce. Hot single-instrument still serializes on `x.mu` before WAL (expected). |
-| **Decision** | **ACCEPT** — durability semantics preserved; pure-WAL sync amortization proven |
+| **P7.5** | F1 — wall ≈ Sync |
+| **Contract** | `Append()==nil` ⇒ event in **synced** batch (not ack-before-disk) |
+| **Mechanics** | seq under `journalMu`; concurrent Append; contiguous prefix flush; Sync; then advance seq |
+| **Bootstrap** | Max=32, Wait=100µs; `WAL_GROUP_COMMIT=off` → Max=1 |
 
-### Crash / ordering notes
+### Unit (pure WAL)
 
-- Contiguous prefix from `lastSequence+1` only  
-- Hole at front waits for lower seq (seq assigned under `journalMu` before Append)  
-- Mid-segment rotation: sub-batch sync then rotate  
-- Successful Submit still means durable CommandBatch  
+| | |
+|--|--|
+| 16 concurrent Append | **2 Sync** (header + batch) vs 16+ without grouping |
+
+### Application A/B — `TestO1_SharedWAL_MultiInstrument`
+
+Config: **8 instruments**, shared WAL, **1 worker/instrument**, 400 no-match commands, SyncOnAppend=true, seed-stable accounts.
+
+| Metric | OFF (Max=1) | ON (Max=32) | Delta |
+|--------|------------:|------------:|------:|
+| **commands/sec** | **~258** | **~2050** | **~8.0×** |
+| **mean latency** | **~27.3 ms** | **~3.8 ms** | **~7.1× better** |
+| max latency | ~1.35 s | ~8 ms | large tail cut |
+| duration (400 cmds) | ~1.55 s | ~0.19 s | |
+
+Reps (same machine):
+
+```text
+OFF: 257, 257, 260 cmd/s   mean_lat ~27.3ms
+ON:  2030, 2039, 2091 cmd/s mean_lat ~3.8ms
+```
+
+A/B via `WAL_GROUP_COMMIT=off` (Max=1, still OO-safe queue) vs default Max=32.
+### What O1 does **not** claim
+
+| Workload | Result | Why |
+|----------|--------|-----|
+| Sequential single-instrument no-match | ~250 cmd/s / ~4ms | No concurrent Append peers to batch |
+| Hot single-instrument (many workers) | still `x.mu`-bound | Serialize before WAL (F2) |
+| Two **separate** harness WALs | no group benefit | Not shared durability path |
+
+### Decision: ACCEPT
+
+Reproducible concurrent multi-instrument improvement with durability contract preserved. Sequential “no change” is consistent with the design, not a failure.
 
 ---
 
-## Impact matrix (illustrative local machine, post-change)
+## Impact matrix summary
 
-| Scenario | Notes |
-|----------|--------|
-| No Match | ~3.7–4.0ms/op; still durability-bound |
-| Full Match | ~7.5ms/op (2× WAL submits); O3 delta copy |
-| Mixed | stable |
-| Hot Instrument | ~3.8ms/op parallel; executor_wait still real (F2) |
-| Multi Instrument | both progress; shared disk + optional group commit |
-| GroupCommit unit | 16 concurrent Append / 2 Sync |
-
-Not an SLA — env-specific. Re-run `make bench` on target hardware.
+| Scenario | O1 | O3 | Notes |
+|----------|----|----|-------|
+| No Match sequential | neutral | neutral | WAL-bound |
+| Full Match | neutral wall | **B/op −85%** | |
+| Mixed | neutral wall | **B/op −70%** | |
+| Hot Instrument | neutral | small | still mutex+fsync |
+| **Shared-WAL multi (8×1)** | **~7.7× thruput** | n/a | **O1 proof** |
 
 ---
 
-## Rejected / not done
+## Rejected
 
-| Idea | Reason |
-|------|--------|
-| Disable fsync | Durability contract break |
+| Idea | Why |
+|------|-----|
+| Disable fsync | Contract break |
 | Remove `x.mu` | Correctness architecture |
-| Unlock across fsync without queue | Crash/ordering hazard |
-| GOMAXPROCS / GOGC tuning as “opt” | Config experiment |
-| Bundle O1+O2+O3 without isolation | Attribution — implemented as layered commits in one milestone but separately reasoned |
+| Unlock across fsync (naive) | Crash/order hazard |
+| Claim O1 from sequential no-match | Wrong experiment |
 
 ---
 
-## New bottleneck after O1–O3
+## Attribution (single feature commit `0428133`, evidence isolated)
 
-1. **Per-command fsync** still dominates sequential single-thread (group commit needs concurrency to help).  
-2. **`x.mu` held during Append** still dominates hot-instrument tails.  
-3. Further wins need explicit architecture (durability pipeline / reduce critical section around I/O), not more micro-opts.
+| ID | Code change | Measured by |
+|----|-------------|-------------|
+| O3 | `matching/engine.go`, `journal.go` | FullMatch/Mixed B/op pre@1cda968 vs post |
+| O2 | same as O3 under lock | qualitative + O3 |
+| O1 | `wal/writer.go`, `journal` unlock, bootstrap | O1_SharedWAL A/B + GroupCommit unit |
 
 ---
 
 ## Reproduction
 
 ```bash
-git rev-parse --short HEAD
+git rev-parse --short HEAD   # expect 0428133+
 make check
 go test ./internal/wal/ -run GroupCommit -v
-go test ./internal/bench/ -bench=. -benchmem -count=2
+WAL_GROUP_COMMIT=off go test ./internal/bench/ -run O1_SharedWAL -count=5 -v
+go test ./internal/bench/ -run O1_SharedWAL -count=5 -v
+go test ./internal/bench/ -bench='BenchmarkFullMatch$' -benchmem -count=3
 ```
