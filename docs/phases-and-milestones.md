@@ -1050,7 +1050,7 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: 🔧 In progress (P7.6 optimization — pending CTO accept)
+### Phase status: 🟢 P7 effectively CLOSED (P7.3 tracing deferred)
 
 ### CTO stance (locked)
 
@@ -1145,15 +1145,15 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (`0428133` / `e483c60`) |
 | **Docs** | [OPTIMIZATION.md](./benchmarks/OPTIMIZATION.md), [ADR 0048](./adr/0048-hot-path-optimization.md) |
 
 ### Delivered
 
-1. **O3 ACCEPT** — `GeneratedTradesFrom` / `TradeCount`; one delta copy/submit  
-2. **O2** — under-lock work ↓ via O3; **REJECT** mutex removal / unlock-across-fsync  
-3. **O1 ACCEPT** — WAL group commit; Append still durable; journalMu = seq only  
-4. `make check` + race on wal/trading/matching; GroupCommit unit test  
+1. **O1** — WAL group commit; shared-WAL multi ~8× cmd/s (258→2050)  
+2. **O3** — trade delta API; FullMatch B/op −85%, Mixed −70%  
+3. **O2** — less work under `x.mu` via O3; mutex removal rejected  
+4. Durability contract preserved (`Append==nil` ⇒ synced batch)  
 
 ---
 
@@ -1257,4 +1257,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P7.6 O1/O2/O3 implemented (pending CTO).
+**Last updated:** 2026-10-15 — P7.6 🟢 ACCEPTED; P7 closed (P7.3 tracing deferred).
