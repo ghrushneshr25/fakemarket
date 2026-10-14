@@ -9,19 +9,17 @@ import (
 	"testing"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
-	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 )
 
 func TestService_MetricsDoNotChangeBehavior(t *testing.T) {
-	m := metrics.New()
 	dir := t.TempDir()
 	accts := testAccounts(t)
-	svc, w, err := Bootstrap(dir, MustInstrument("AAPL"), accts)
+	boot, err := BootstrapFull(dir, MustInstrument("AAPL"), accts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = w.Close() })
-	svc.WithMetrics(m)
+	t.Cleanup(func() { _ = boot.WAL.Close() })
+	svc, m := boot.Service, boot.Metrics
 
 	px := domain.Price(100)
 	res, err := svc.Submit(context.Background(), SubmitOrderCommand{
@@ -43,13 +41,18 @@ func TestService_MetricsDoNotChangeBehavior(t *testing.T) {
 	m.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	b, _ := io.ReadAll(rr.Body)
 	s := string(b)
-	if !strings.Contains(s, "fakemarket_orders_submitted_total") {
-		t.Fatal(s)
-	}
-	if !strings.Contains(s, "fakemarket_orders_accepted_total") {
-		t.Fatal(s)
-	}
-	if !strings.Contains(s, "fakemarket_orders_rejected_total") {
-		t.Fatal(s)
+	for _, want := range []string{
+		"fakemarket_orders_submitted_total",
+		"fakemarket_orders_accepted_total",
+		"fakemarket_orders_rejected_total",
+		"fakemarket_engine_phase_duration_seconds",
+		"phase=\"risk\"",
+		"phase=\"matching\"",
+		"phase=\"journal\"",
+		"fakemarket_wal_append_duration_seconds",
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %s", want)
+		}
 	}
 }

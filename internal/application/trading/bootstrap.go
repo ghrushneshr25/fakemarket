@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
+	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
 
@@ -17,6 +18,7 @@ type BootstrapResult struct {
 	Read     *ReadModel
 	Accounts *AccountRegistry
 	Res      *domain.ReservationStore
+	Metrics  *metrics.Registry
 }
 
 // Bootstrap builds a ready TradingService for tests/simulators (direct Go path).
@@ -47,7 +49,11 @@ func BootstrapMulti(
 	if len(instruments) == 0 {
 		return nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
 	}
-	w, err := wal.Open(wal.Config{Dir: walDir, SyncOnAppend: true})
+	mreg := metrics.New()
+	w, err := wal.Open(wal.Config{
+		Dir: walDir, SyncOnAppend: true,
+		OnAppend: func(ok bool, n int, d time.Duration) { mreg.ObserveWAL(ok, n, d) },
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +64,7 @@ func BootstrapMulti(
 	reg := NewAccountRegistry(accounts)
 	resStore := domain.NewReservationStore()
 	router := NewRouter()
-	svc := NewService(router)
+	svc := NewService(router).WithMetrics(mreg)
 	onFault := func() { svc.SetReady(false) }
 	for _, inst := range instruments {
 		deps := ExecutorDeps{
@@ -72,6 +78,7 @@ func BootstrapMulti(
 			OrderSeq:         &orderSeq,
 			Clock:            func() time.Time { return time.Now().UTC() },
 			OnDurableFailure: onFault,
+			Metrics:          mreg,
 		}
 		if probes != nil {
 			deps.Probe = probes[inst.ID]
@@ -91,7 +98,7 @@ func BootstrapMulti(
 		EventSeq: &eventSeq,
 	}
 	return &BootstrapResult{
-		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore,
+		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore, Metrics: mreg,
 	}, nil
 }
 

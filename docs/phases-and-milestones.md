@@ -1050,7 +1050,7 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: 🔧 In progress (P7.1)
+### Phase status: 🔧 In progress (P7.2 next after P7.1 accept)
 
 ### CTO stance (locked)
 
@@ -1072,7 +1072,7 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (`62f2c1f`) |
 | **Code** | `internal/observability/metrics` |
 | **ADR** | [0042](./adr/0042-metrics.md) |
 
@@ -1084,6 +1084,25 @@ Do NOT start hot-path engine optimization yet.
 4. Optional wiring: `Service.WithMetrics`, `wal.Config.OnAppend`, Hub/Recovery  
 5. Domain/matching free of metrics imports  
 6. Tests: exposition, nil-safe, behavior unchanged with metrics  
+
+---
+
+## P7.2 — Latency Boundaries
+
+| | |
+|--|--|
+| **Status** | ✅ implemented — pending CTO accept |
+| **Code** | `metrics` phase/transport histograms; executor phase timers; gRPC interceptor |
+| **ADR** | [0043](./adr/0043-latency-boundaries.md) |
+
+### Delivered
+
+1. Documented boundaries: transport vs service vs risk/matching/journal vs WAL  
+2. `engine_phase_duration_seconds{phase=risk\|matching\|journal}`  
+3. `transport_duration_seconds{transport=grpc}` interceptor helper  
+4. `trades_total` incremented on submit match fills  
+5. Bootstrap wires metrics + WAL OnAppend + executor phases  
+6. **No optimization** — measurement only  
 
 ---
 
@@ -1187,4 +1206,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P7.1 Metrics implemented (ADR 0042). Awaiting CTO accept.
+**Last updated:** 2026-10-15 — P7.1 ACCEPTED; P7.2 latency boundaries implemented (ADR 0043).

@@ -35,14 +35,21 @@ type Registry struct {
 	OrdersCancelled prometheus.Counter
 	TradesTotal     prometheus.Counter
 	TradingErrors   *prometheus.CounterVec
-	TradingDuration *prometheus.HistogramVec // operation=submit|cancel
+	// TradingDuration = full Service.Submit/Cancel (P7.1 end-to-end service boundary).
+	TradingDuration *prometheus.HistogramVec // operation=submit|cancel, result=
+	// P7.2 nested engine phases (still no transport/network):
+	//   risk | matching | journal  (and optional engine_total)
+	EnginePhaseDuration *prometheus.HistogramVec // phase=, operation=submit|cancel
+
+	// Transport (gRPC interceptor) — includes network + serialization on server handler path.
+	// Distinct from engine-side TradingDuration.
+	TransportDuration *prometheus.HistogramVec // transport=grpc, operation=
 
 	// WAL
 	WALAppends        prometheus.Counter
 	WALAppendFails    prometheus.Counter
 	WALBytesWritten   prometheus.Counter
-	WALAppendDuration prometheus.Histogram
-
+	WALAppendDuration prometheus.Histogram // includes fsync when SyncOnAppend
 	// Market data
 	MDEventsTotal      prometheus.Counter
 	MDClients          prometheus.Gauge
@@ -78,12 +85,21 @@ func New() *Registry {
 	m.OrdersCancelled = mustCounter(r, "fakemarket_orders_cancelled_total", "Successful cancels")
 	m.TradesTotal = mustCounter(r, "fakemarket_trades_total", "Trades executed")
 	m.TradingErrors = mustCounterVec(r, "fakemarket_trading_errors_total", "Trading path errors", "operation", "result")
-	m.TradingDuration = mustHistVec(r, "fakemarket_trading_command_duration_seconds", "Trading command latency", "operation", "result")
+	m.TradingDuration = mustHistVec(r, "fakemarket_trading_command_duration_seconds",
+		"Service-boundary trading latency (validation+risk+match+WAL); NOT pure matching; NOT gRPC network",
+		"operation", "result")
+	m.EnginePhaseDuration = mustHistVec(r, "fakemarket_engine_phase_duration_seconds",
+		"Nested engine phases inside InstrumentExecutor (P7.2). phase=risk|matching|journal",
+		"phase", "operation")
+	m.TransportDuration = mustHistVec(r, "fakemarket_transport_duration_seconds",
+		"Transport handler latency (e.g. gRPC server interceptor); includes codec+network on wire path",
+		"transport", "operation")
 
 	m.WALAppends = mustCounter(r, "fakemarket_wal_appends_total", "Successful WAL appends")
 	m.WALAppendFails = mustCounter(r, "fakemarket_wal_append_failures_total", "Failed WAL appends")
 	m.WALBytesWritten = mustCounter(r, "fakemarket_wal_bytes_written_total", "Bytes written to WAL")
-	m.WALAppendDuration = mustHist(r, "fakemarket_wal_append_duration_seconds", "WAL append latency including fsync when enabled")
+	m.WALAppendDuration = mustHist(r, "fakemarket_wal_append_duration_seconds",
+		"WAL Append wall time including encode/write/flush and fsync when SyncOnAppend=true")
 
 	m.MDEventsTotal = mustCounter(r, "fakemarket_marketdata_events_total", "MD events published")
 	m.MDClients = mustGauge(r, "fakemarket_marketdata_clients", "Connected MD WebSocket clients")
@@ -108,7 +124,8 @@ func (m *Registry) Handler() http.Handler {
 	return promhttp.HandlerFor(m.reg, promhttp.HandlerOpts{Registry: m.reg})
 }
 
-// ObserveTrading records a trading command attempt outcome and duration.
+// ObserveTrading records service-boundary trading latency (P7.1).
+// Boundary: Service.Submit/Cancel entry → return (includes risk+match+WAL when executed).
 func (m *Registry) ObserveTrading(operation string, result Result, d time.Duration) {
 	if m == nil {
 		return
@@ -117,6 +134,31 @@ func (m *Registry) ObserveTrading(operation string, result Result, d time.Durati
 	if result != ResultOK {
 		m.TradingErrors.WithLabelValues(operation, string(result)).Inc()
 	}
+}
+
+// Phase names for EnginePhaseDuration (bounded label values).
+const (
+	PhaseRisk     = "risk"
+	PhaseMatching = "matching"
+	PhaseJournal  = "journal"
+)
+
+// ObserveEnginePhase records nested executor phase latency (P7.2).
+// Does not include gRPC/network. Journal phase is application journal build+WAL.Append call span
+// (WAL's own AppendDuration may nest inside and is also recorded separately).
+func (m *Registry) ObserveEnginePhase(phase, operation string, d time.Duration) {
+	if m == nil {
+		return
+	}
+	m.EnginePhaseDuration.WithLabelValues(phase, operation).Observe(d.Seconds())
+}
+
+// ObserveTransport records transport-level handler latency (P7.2).
+func (m *Registry) ObserveTransport(transport, operation string, d time.Duration) {
+	if m == nil {
+		return
+	}
+	m.TransportDuration.WithLabelValues(transport, operation).Observe(d.Seconds())
 }
 
 // ObserveWAL records append success/failure and duration.

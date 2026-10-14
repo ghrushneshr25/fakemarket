@@ -9,6 +9,7 @@ import (
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/matching"
+	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
 
@@ -45,6 +46,7 @@ type InstrumentExecutor struct {
 	faulted      bool
 	onFault      func()
 	probe        ConcurrencyProbe
+	metrics      *metrics.Registry
 }
 
 // ConcurrencyProbe is optional observation of the per-instrument critical section.
@@ -89,6 +91,7 @@ type ExecutorDeps struct {
 	// OnDurableFailure is called if WAL append fails after state mutation (match/reserve).
 	OnDurableFailure func()
 	Probe            ConcurrencyProbe
+	Metrics          *metrics.Registry // optional P7.2 phase timers
 }
 
 // NewInstrumentExecutor constructs a single-instrument execution context.
@@ -144,7 +147,14 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 		orderAccount: make(map[domain.OrderID]domain.AccountID),
 		onFault:      d.OnDurableFailure,
 		probe:        d.Probe,
+		metrics:      d.Metrics,
 	}, nil
+}
+
+func (x *InstrumentExecutor) observePhase(phase, op string, start time.Time) {
+	if x.metrics != nil {
+		x.metrics.ObserveEnginePhase(phase, op, time.Since(start))
+	}
 }
 
 func (x *InstrumentExecutor) enterCritical() {
@@ -246,6 +256,7 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 	}
 	// Risk reads under account RLock for a stable cash/position view.
 	var resv domain.Reservation
+	riskStart := time.Now()
 	err = func() error {
 		x.accounts.mu.RLock()
 		defer x.accounts.mu.RUnlock()
@@ -265,14 +276,18 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 		})
 		return rerr
 	}()
+	x.observePhase(metrics.PhaseRisk, "submit", riskStart)
 	if err != nil {
 		return SubmitOrderResult{}, err
 	}
 
 	// Match mutates book — after this point WAL failure fail-closes the executor.
-	if err := x.engine.Execute(matching.Command{
+	matchStart := time.Now()
+	err = x.engine.Execute(matching.Command{
 		Seq: uint64(oseq), Type: matching.CmdSubmitOrder, Timestamp: x.clock(), Params: params,
-	}); err != nil {
+	})
+	x.observePhase(metrics.PhaseMatching, "submit", matchStart)
+	if err != nil {
 		_ = x.res.Release(oid) // best-effort undo reserve if match failed before book commit
 		return SubmitOrderResult{}, err
 	}
@@ -285,8 +300,15 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 
 	ts := x.clock()
 	// One WAL record (CommandBatch) = all-or-nothing durability for the command.
+	jStart := time.Now()
+	tradeN := len(x.engine.GeneratedTrades()) - x.tradeCursor
 	if err := x.commitSubmitBatch(cmd, oid, oseq, resv, live, ts); err != nil {
+		x.observePhase(metrics.PhaseJournal, "submit", jStart)
 		return SubmitOrderResult{}, x.durableFail(err)
+	}
+	x.observePhase(metrics.PhaseJournal, "submit", jStart)
+	if tradeN > 0 && x.metrics != nil {
+		x.metrics.TradesTotal.Add(float64(tradeN))
 	}
 
 	return SubmitOrderResult{
@@ -326,17 +348,23 @@ func (x *InstrumentExecutor) Cancel(ctx context.Context, cmd CancelOrderCommand)
 	}
 	rem := live.RemainingQuantity()
 
-	if err := x.engine.Execute(matching.Command{
+	matchStart := time.Now()
+	err := x.engine.Execute(matching.Command{
 		Seq: uint64(x.nextOrderSeq()), Type: matching.CmdCancelOrder,
 		Timestamp: x.clock(), CancelOrderID: cmd.OrderID,
-	}); err != nil {
+	})
+	x.observePhase(metrics.PhaseMatching, "cancel", matchStart)
+	if err != nil {
 		return CancelOrderResult{}, err
 	}
 
 	ts := x.clock()
+	jStart := time.Now()
 	if err := x.commitCancelBatch(cmd, rem, ts); err != nil {
+		x.observePhase(metrics.PhaseJournal, "cancel", jStart)
 		return CancelOrderResult{}, x.durableFail(err)
 	}
+	x.observePhase(metrics.PhaseJournal, "cancel", jStart)
 
 	return CancelOrderResult{
 		OrderID: cmd.OrderID, Status: live.Status(),
