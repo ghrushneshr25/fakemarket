@@ -1050,7 +1050,7 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: 🔧 In progress (P7.4 benchmarks)
+### Phase status: 🔧 In progress (P7.5 profiling next)
 
 ### CTO stance (locked)
 
@@ -1110,18 +1110,26 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (`58f37e6`) |
 | **Code** | `internal/bench` |
-| **Docs** | [benchmarks/README.md](./benchmarks/README.md), [ADR 0046](./adr/0046-benchmark-suite.md) |
+| **Docs** | [benchmarks/README.md](./benchmarks/README.md), [COMPARE.md](./benchmarks/COMPARE.md), [ADR 0046](./adr/0046-benchmark-suite.md) |
 
 ### Delivered
 
-1. Harness: isolated BootstrapFull + metrics + env capture  
-2. Workloads: no-match, full-match, partial, cancel, mixed, contention, depth scale  
-3. Reports `executor_wait` / matching / wal via metrics scrape logs  
-4. `make bench` + CI smoke `TestGoldenBaselineSmoke`  
-5. Baseline template under `docs/benchmarks/results/`  
-6. **No hot-path optimization**  
+1. Real `Service` path; seeded generator; B1–B7 scenarios  
+2. Scale via `BENCH_SCALE` (CI small; 100K/1M/10M supported)  
+3. Wall P50–P99.9 + `executor_wait` / matching / wal visibility  
+4. SyncWAL primary; multi-instrument; JSON + COMPARE methodology  
+5. **No hot-path optimization**  
+
+---
+
+## P7.5 — Profiling
+
+| | |
+|--|--|
+| **Status** | ⏭️ **NEXT** |
+| **Rule** | Discover *why* bottlenecks are slow; **do not implement optimizations** (P7.6) |
 
 ---
 
