@@ -50,3 +50,7 @@ temp/
 
 # Personal study notes (not part of the product tree)
 .help/
+
+# pprof artifacts
+*.pprof
+**/profiles/out/

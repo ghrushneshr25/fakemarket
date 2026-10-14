@@ -1,2 +1,0 @@
-label=B_hot
-finished=2026-10-18T07:13:21Z

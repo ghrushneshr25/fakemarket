@@ -1,9 +1,0 @@
-Go: go1.25.5
-OS/Arch: darwin/arm64
-NumCPU: 10
-GOMAXPROCS: 10
-GitCommit: e133537
-Seed: 42
-Instrument: AAPL
-WALSync: true
-Notes: direct Go Service path; engine-side latency (no gRPC network)

@@ -1,2 +1,0 @@
-label=A_mixed
-finished=2026-10-18T07:13:18Z
