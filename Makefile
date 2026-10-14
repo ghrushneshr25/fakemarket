@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet run check clean help proto e2e bench
+.PHONY: build test lint fmt vet run check clean help proto e2e bench bench-scale profile profile-full
 APP_NAME := fakemarket
 CMD_PATH := ./cmd/fakemarket
 BIN_DIR  := bin
@@ -68,6 +68,35 @@ bench:
 bench-scale:
 	$(GO) test ./internal/bench/ -run 'Scale_' -count=1 -v
 
+## profile: P7.5 pprof A–E (each test = own process so mutex/block do not bleed). Not a thruput claim.
+profile:
+	@mkdir -p docs/benchmarks/profiles/out
+	@c=$$(git rev-parse --short HEAD 2>/dev/null || echo local); \
+	export GIT_COMMIT=$$c PROFILE_WRITE=1 PROFILE_N=$${PROFILE_N:-800}; \
+	for t in TestProfile_A_Mixed TestProfile_B_HotInstrument TestProfile_C_FullMatch TestProfile_D_NoMatch_WAL TestProfile_E_DeepBook; do \
+	  echo "=== $$t ==="; \
+	  $(GO) test ./internal/bench/ -run "^$$t$$" -count=1 -v || exit 1; \
+	done
+
+## profile-full: longer steady-state profiles (separate processes)
+profile-full:
+	@mkdir -p docs/benchmarks/profiles/out
+	@c=$$(git rev-parse --short HEAD 2>/dev/null || echo local); \
+	export GIT_COMMIT=$$c PROFILE_WRITE=1 PROFILE_FULL=1 PROFILE_N=$${PROFILE_N:-5000}; \
+	for t in TestProfile_A_Mixed TestProfile_B_HotInstrument TestProfile_C_FullMatch TestProfile_D_NoMatch_WAL TestProfile_E_DeepBook; do \
+	  echo "=== $$t ==="; \
+	  $(GO) test ./internal/bench/ -run "^$$t$$" -count=1 -v || exit 1; \
+	done
+
+## profile-top: print top of key pprof files (requires prior make profile)
+profile-top:
+	@c=$$(git rev-parse --short HEAD 2>/dev/null || echo local); \
+	d=docs/benchmarks/profiles/out/$$c; \
+	echo "== $$d =="; \
+	for f in A_mixed_cpu A_mixed_allocs B_hot_cpu B_hot_mutex B_hot_block C_fullmatch_cpu C_fullmatch_allocs D_wal_cpu D_wal_block E_depth_cpu; do \
+	  p=$$d/$${f}.pprof; \
+	  if [ -f $$p ]; then echo "--- $$f ---"; go tool pprof -top -nodecount=12 $$p 2>/dev/null | head -22; echo; fi; \
+	done
 ## fmt-check: verify formatting without writing changes
 fmt-check:
 	@unformatted=$$(gofmt -l .); \

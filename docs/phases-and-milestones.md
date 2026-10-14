@@ -1050,7 +1050,7 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: 🔧 In progress (P7.5 profiling next)
+### Phase status: 🔧 In progress (P7.5 profiling — pending CTO accept)
 
 ### CTO stance (locked)
 
@@ -1128,8 +1128,18 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ⏭️ **NEXT** |
-| **Rule** | Discover *why* bottlenecks are slow; **do not implement optimizations** (P7.6) |
+| **Status** | ✅ implemented — pending CTO accept |
+| **Code** | `internal/bench/profile.go`, `profile_test.go` |
+| **Docs** | [PROFILING.md](./benchmarks/PROFILING.md), [ADR 0047](./adr/0047-profiling-workflow.md) |
+| **Rule** | Discover *why*; **do not optimize** (P7.6) |
+
+### Delivered
+
+1. CPU / heap / allocs / mutex / block via pprof on real Service path  
+2. Profiles A–E driven by P7.4 (mixed, hot, full-match, WAL, depth)  
+3. Separate process per scenario; SyncWAL primary  
+4. Findings F1–F6 classified Confirmed/Inconclusive; P7.6 candidates only  
+5. `make profile` / `profile-full` / `profile-top`  
 
 ---
 
@@ -1233,4 +1243,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P7.4 🟢 ACCEPTED (`58f37e6`); P7.5 Profiling next.
+**Last updated:** 2026-10-15 — P7.5 profiling suite + PROFILING.md findings (pending CTO).

@@ -1,0 +1,4 @@
+# Binary pprof artifacts (regenerate via make profile-*)
+out/
+*.pprof
+*.pb.gz
