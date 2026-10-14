@@ -1233,4 +1233,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P7.4 benchmark suite (`internal/bench`, ADR 0046).
+**Last updated:** 2026-10-15 — P7.4 🟢 ACCEPTED (`58f37e6`); P7.5 Profiling next.
