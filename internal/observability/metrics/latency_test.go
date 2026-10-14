@@ -11,6 +11,7 @@ import (
 
 func TestEnginePhaseAndTransportMetrics(t *testing.T) {
 	m := New()
+	m.ObserveEnginePhase(PhaseExecutorWait, "submit", 5*time.Microsecond)
 	m.ObserveEnginePhase(PhaseRisk, "submit", 10*time.Microsecond)
 	m.ObserveEnginePhase(PhaseMatching, "submit", 20*time.Microsecond)
 	m.ObserveEnginePhase(PhaseJournal, "submit", 100*time.Microsecond)
@@ -23,10 +24,11 @@ func TestEnginePhaseAndTransportMetrics(t *testing.T) {
 	s := string(body)
 	for _, want := range []string{
 		"fakemarket_engine_phase_duration_seconds",
+		"phase=\"executor_wait\"",
 		"phase=\"risk\"",
 		"phase=\"matching\"",
 		"phase=\"journal\"",
-		"fakemarket_transport_duration_seconds",
+		"fakemarket_grpc_server_rpc_duration_seconds",
 		"transport=\"grpc\"",
 		"fakemarket_trading_command_duration_seconds",
 	} {

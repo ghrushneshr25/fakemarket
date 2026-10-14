@@ -1091,17 +1091,17 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (executor_wait + server-side gRPC naming) |
 | **Code** | `metrics` phase/transport histograms; executor phase timers; gRPC interceptor |
 | **ADR** | [0043](./adr/0043-latency-boundaries.md) |
 
 ### Delivered
 
-1. Documented boundaries: transport vs service vs risk/matching/journal vs WAL  
-2. `engine_phase_duration_seconds{phase=risk\|matching\|journal}`  
-3. `transport_duration_seconds{transport=grpc}` interceptor helper  
-4. `trades_total` incremented on submit match fills  
-5. Bootstrap wires metrics + WAL OnAppend + executor phases  
+1. Boundaries: gRPC **server** RPC vs service vs **executor_wait**/risk/matching/journal vs WAL  
+2. `phase=executor_wait` = time blocked on `x.mu` (single-writer contention)  
+3. Metric `grpc_server_rpc_duration_seconds` (not client RTT)  
+4. Nested phases **not** additive to parent (documented)  
+5. `trades_total` on fills; bootstrap wiring  
 6. **No optimization** — measurement only  
 
 ---

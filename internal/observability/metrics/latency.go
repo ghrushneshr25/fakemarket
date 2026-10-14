@@ -2,40 +2,34 @@ package metrics
 
 // Latency boundary definitions (P7.2).
 //
-// These comments are the contract for what each metric measures.
 // Do not change start/stop without updating ADR 0043 and benchmarks.
 //
 // ---------------------------------------------------------------------------
-// Hierarchy (nested times are NOT required to sum to parent):
+// Hierarchy — parent = wall clock; children = nested diagnostics.
+// Children are NOT guaranteed to partition/add up to the parent
+// (measurement overhead, work outside timed blocks, idempotency path, etc.).
 //
-//	TransportDuration (grpc)          // optional; only on gRPC path
-//	  └── TradingDuration (service) // Service.Submit/Cancel wall time
-//	        ├── EnginePhase risk
-//	        ├── EnginePhase matching  // Engine.Execute only
-//	        └── EnginePhase journal   // CommandBatch build + WAL.Append call
-//	              └── WALAppendDuration  // inside Append; includes fsync if enabled
+//	grpc_server_rpc_duration (SERVER-SIDE only; NOT client RTT)
+//	  └── trading_command_duration   Service.Submit|Cancel wall
+//	        ├── executor_wait        blocked on InstrumentExecutor.x.mu
+//	        ├── risk                 checks + reserve (after lock held)
+//	        ├── matching             Engine.Execute only
+//	        └── journal              CommandBatch build + WAL.Append call
+//	              └── wal_append_duration   inside Append (+ fsync if enabled)
 //
-// Direct Go simulator / tests:
-//	TradingDuration only (no TransportDuration).
+// Direct Go / simulator: no grpc_server_rpc_duration.
 //
-// Error paths:
-//	- Reject before match: risk phase may be partial; matching/journal not observed.
-//	- Fail after match on WAL: matching observed; journal/WAL observed as failure.
+// Error paths: only phases that ran are observed.
 //
-// What we deliberately do NOT claim:
-//	- TradingDuration == pure matching
-//	- TransportDuration == pure network (includes server handler + codec)
-//	- Phase histograms sum exactly to TradingDuration (lock wait, idempotency, etc.)
+// Do NOT compute: risk+matching+journal == TradingDuration
+// Do NOT interpret grpc_server_rpc as client→server→client network RTT.
 // ---------------------------------------------------------------------------
 
-// DocTradingDuration is the Prometheus help text contract for service latency.
-const DocTradingDuration = "Service.Submit|Cancel entry→return (risk+match+WAL when run); not pure matching; not client RTT"
+const DocTradingDuration = "Service.Submit|Cancel entry→return; not pure matching; not client RTT"
 
-// DocEnginePhase is the contract for nested phases.
-const DocEnginePhase = "Executor phases: risk (checks+reserve), matching (Engine.Execute), journal (batch+Append)"
+const DocEnginePhase = "executor_wait|risk|matching|journal — nested diagnostics, not additive partition"
 
-// DocWALAppend is the contract for WAL latency.
 const DocWALAppend = "Writer.Append wall time: encode+write+flush+[fsync if SyncOnAppend]"
 
-// DocTransport is the contract for transport latency.
-const DocTransport = "gRPC unary server interceptor: handler entry→exit (includes engine call)"
+// DocTransport clarifies server-side-only semantics (metric name: grpc_server_rpc_duration_seconds).
+const DocTransport = "SERVER-SIDE gRPC unary interceptor entry→handler return; NOT client-observed E2E RTT"

@@ -210,7 +210,10 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 	if err := ctx.Err(); err != nil {
 		return SubmitOrderResult{}, err
 	}
+	// executor_wait = time blocked acquiring per-instrument single-writer lock (P6.1/P7.2).
+	waitStart := time.Now()
 	x.mu.Lock()
+	x.observePhase(metrics.PhaseExecutorWait, "submit", waitStart)
 	x.enterCritical()
 	defer func() {
 		x.leaveCritical()
@@ -335,7 +338,9 @@ func (x *InstrumentExecutor) Cancel(ctx context.Context, cmd CancelOrderCommand)
 	if err := ctx.Err(); err != nil {
 		return CancelOrderResult{}, err
 	}
+	waitStart := time.Now()
 	x.mu.Lock()
+	x.observePhase(metrics.PhaseExecutorWait, "cancel", waitStart)
 	x.enterCritical()
 	defer func() {
 		x.leaveCritical()

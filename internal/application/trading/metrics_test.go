@@ -46,6 +46,7 @@ func TestService_MetricsDoNotChangeBehavior(t *testing.T) {
 		"fakemarket_orders_accepted_total",
 		"fakemarket_orders_rejected_total",
 		"fakemarket_engine_phase_duration_seconds",
+		"phase=\"executor_wait\"",
 		"phase=\"risk\"",
 		"phase=\"matching\"",
 		"phase=\"journal\"",

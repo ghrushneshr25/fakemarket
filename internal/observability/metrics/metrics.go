@@ -89,10 +89,11 @@ func New() *Registry {
 		"Service-boundary trading latency (validation+risk+match+WAL); NOT pure matching; NOT gRPC network",
 		"operation", "result")
 	m.EnginePhaseDuration = mustHistVec(r, "fakemarket_engine_phase_duration_seconds",
-		"Nested engine phases inside InstrumentExecutor (P7.2). phase=risk|matching|journal",
+		"Nested engine phases (P7.2). phase=executor_wait|risk|matching|journal. Nested; NOT additive to TradingDuration",
 		"phase", "operation")
-	m.TransportDuration = mustHistVec(r, "fakemarket_transport_duration_seconds",
-		"Transport handler latency (e.g. gRPC server interceptor); includes codec+network on wire path",
+	// Name is server-side gRPC RPC handling — NOT client-observed end-to-end RTT.
+	m.TransportDuration = mustHistVec(r, "fakemarket_grpc_server_rpc_duration_seconds",
+		"SERVER-SIDE gRPC unary: interceptor entry→handler return (codec+Service). NOT client RTT / NOT pure network",
 		"transport", "operation")
 
 	m.WALAppends = mustCounter(r, "fakemarket_wal_appends_total", "Successful WAL appends")
@@ -138,9 +139,12 @@ func (m *Registry) ObserveTrading(operation string, result Result, d time.Durati
 
 // Phase names for EnginePhaseDuration (bounded label values).
 const (
-	PhaseRisk     = "risk"
-	PhaseMatching = "matching"
-	PhaseJournal  = "journal"
+	// PhaseExecutorWait = time blocked on InstrumentExecutor.x.mu before work starts.
+	// Critical for single-writer contention diagnosis (P6.1 / P7.2).
+	PhaseExecutorWait = "executor_wait"
+	PhaseRisk         = "risk"
+	PhaseMatching     = "matching"
+	PhaseJournal      = "journal"
 )
 
 // ObserveEnginePhase records nested executor phase latency (P7.2).

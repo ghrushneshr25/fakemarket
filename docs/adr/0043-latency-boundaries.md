@@ -1,6 +1,6 @@
 # ADR 0043 — Latency Boundaries (P7.2)
 
-**Status:** Accepted  
+**Status:** Accepted (CTO — executor_wait + server-side gRPC naming)  
 **Date:** 2026-10-15  
 **Phase:** P7 — Performance & Observability  
 **Milestone:** P7.2
@@ -10,46 +10,61 @@
 Define **exact start/stop** for each latency metric so P7.4/P7.6 evidence is comparable.
 
 ```text
-Client RTT (not instrumented server-side)
-    │
-TransportDuration [grpc]     interceptor entry → handler exit
-    │                          (codec + Service call; NOT pure engine)
-    ▼
-TradingDuration [service]    Service.Submit|Cancel entry → return
-    │
-    ├── EnginePhase risk       checks + reserve
-    ├── EnginePhase matching   Engine.Execute only
-    └── EnginePhase journal    CommandBatch build + WAL.Append call
-            │
-            └── WALAppendDuration   Append internals (encode/write/flush/[fsync])
+grpc_server_rpc_duration_seconds   SERVER-SIDE only
+  interceptor entry → handler return
+  (codec + Service call)
+  NOT client→network→server→network→client RTT
+
+trading_command_duration_seconds   Service.Submit|Cancel wall
+  │
+  ├── executor_wait   blocked on InstrumentExecutor.x.mu  (P6.1 single-writer)
+  ├── risk            checks + reserve (lock already held)
+  ├── matching        Engine.Execute only
+  └── journal         CommandBatch build + WAL.Append call
+        └── wal_append_duration   Append internals (+ fsync if SyncOnAppend)
 ```
 
-### Rules
+### Nested / non-additive rule (locked)
 
-1. **Do not mix** transport and engine when diagnosing the matching path.  
-2. Nested phases **need not sum** to parent (lock wait, idempotency lookup, etc.).  
-3. **Direct Go** path has no TransportDuration.  
-4. Error paths still record phases that ran (e.g. risk observed on reject).  
-5. Metrics still must not change financial/sequence semantics (P7.1 rules).
+> Parent durations are **wall-clock elapsed time**.  
+> Child phase durations are **nested diagnostic measurements**.  
+> They are **not** guaranteed to form an additive partition of the parent  
+> (overhead, work outside timed blocks, idempotent short-circuit, etc.).
 
-### Metrics
+**Do not** build dashboards that assume:
 
-| Metric | Boundary |
-|--------|----------|
-| `fakemarket_trading_command_duration_seconds` | Service wall |
-| `fakemarket_engine_phase_duration_seconds{phase}` | risk / matching / journal |
-| `fakemarket_wal_append_duration_seconds` | WAL.Append incl. fsync if enabled |
-| `fakemarket_transport_duration_seconds{transport="grpc"}` | Unary server interceptor |
-| `fakemarket_query_duration_seconds` | Query service method |
-| `fakemarket_marketdata_publish_duration_seconds` | Hub.Publish |
+```text
+executor_wait + risk + matching + journal = trading_command_duration
+```
 
-### Histogram buckets
+### executor_wait (required for single-writer architecture)
 
-Shared fixed buckets (see `metrics.latencyBuckets`) from 10µs to 1s. P7.4 may revisit if quantiles are coarse.
+```text
+start = time.Now() before x.mu.Lock()
+stop  = immediately after Lock() returns
+```
+
+Under instrument contention this is the dominant unexplained gap between
+`trading_command_duration` and the sum of risk/matching/journal.
+
+### gRPC metric naming
+
+Prometheus name: **`fakemarket_grpc_server_rpc_duration_seconds`**
+
+Explicitly **server-side RPC handling**, not end-to-end transport RTT.
+Client-observed latency requires a client interceptor or external probe (out of P7.2 scope).
+
+### Direct Go path
+
+Simulator / unit tests calling `Service.Submit` directly produce **no** gRPC server RPC samples — only trading + engine phases + WAL.
+
+### Error paths
+
+Only phases that ran are observed (e.g. reject after risk still records risk + executor_wait).
 
 ### Non-goals
 
-Optimization, changing fsync policy, tracing (P7.3), formal bench harness (P7.4).
+Hot-path optimization, changing fsync policy, tracing (P7.3), formal benches (P7.4).
 
 ## Status
 
