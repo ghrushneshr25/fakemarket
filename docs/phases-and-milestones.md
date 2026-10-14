@@ -1050,7 +1050,7 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: 🔧 In progress (P7.5 profiling — pending CTO accept)
+### Phase status: 🔧 In progress (P7.6 optimization next)
 
 ### CTO stance (locked)
 
@@ -1128,18 +1128,31 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO accept |
+| **Status** | 🟢 **ACCEPTED** (`7dbf683` / `a7bb5b4`) |
 | **Code** | `internal/bench/profile.go`, `profile_test.go` |
 | **Docs** | [PROFILING.md](./benchmarks/PROFILING.md), [ADR 0047](./adr/0047-profiling-workflow.md) |
-| **Rule** | Discover *why*; **do not optimize** (P7.6) |
 
 ### Delivered
 
-1. CPU / heap / allocs / mutex / block via pprof on real Service path  
-2. Profiles A–E driven by P7.4 (mixed, hot, full-match, WAL, depth)  
-3. Separate process per scenario; SyncWAL primary  
-4. Findings F1–F6 classified Confirmed/Inconclusive; P7.6 candidates only  
-5. `make profile` / `profile-full` / `profile-top`  
+1. CPU / heap / allocs / mutex / block on real Service path  
+2. Profiles A–E; separate process; SyncWAL primary  
+3. F1 WAL I/O · F2 executor mutex · F3 GeneratedTrades alloc · F4 no book rewrite  
+4. **No optimization** — P7.6 candidates only  
+
+---
+
+## P7.6 — Hot Path Optimization
+
+| | |
+|--|--|
+| **Status** | ⏭️ **NEXT** |
+| **Rule** | Change only with P7.4 baseline + P7.5 evidence; reject no-ops |
+
+### Candidate queue (evaluate separately)
+
+1. Durability path (not disable fsync)  
+2. Work under `InstrumentExecutor` lock (keep single-writer)  
+3. `GeneratedTrades` allocs (only if wall benefit proven)  
 
 ---
 
@@ -1243,4 +1256,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P7.5 profiling suite + PROFILING.md findings (pending CTO).
+**Last updated:** 2026-10-15 — P7.5 🟢 ACCEPTED; P7.6 Optimization next.
