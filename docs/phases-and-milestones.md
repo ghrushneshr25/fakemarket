@@ -1206,4 +1206,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P7.1 ACCEPTED; P7.2 latency boundaries implemented (ADR 0043).
+**Last updated:** 2026-10-15 — Nexus composition root (`internal/app`, ADR 0045); P7.2 latency boundaries in place.
