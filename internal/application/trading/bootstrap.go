@@ -2,6 +2,7 @@ package trading
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,7 @@ type BootstrapResult struct {
 	Accounts *AccountRegistry
 	Res      *domain.ReservationStore
 	Metrics  *metrics.Registry
+	Logger   *slog.Logger
 }
 
 // Bootstrap builds a ready TradingService for tests/simulators (direct Go path).
@@ -63,8 +65,9 @@ func BootstrapMulti(
 	var journalMu sync.Mutex
 	reg := NewAccountRegistry(accounts)
 	resStore := domain.NewReservationStore()
+	log := slog.Default()
 	router := NewRouter()
-	svc := NewService(router).WithMetrics(mreg)
+	svc := NewService(router).WithMetrics(mreg).WithLogger(log)
 	onFault := func() { svc.SetReady(false) }
 	for _, inst := range instruments {
 		deps := ExecutorDeps{
@@ -79,6 +82,7 @@ func BootstrapMulti(
 			Clock:            func() time.Time { return time.Now().UTC() },
 			OnDurableFailure: onFault,
 			Metrics:          mreg,
+			Logger:           log,
 		}
 		if probes != nil {
 			deps.Probe = probes[inst.ID]
@@ -98,7 +102,7 @@ func BootstrapMulti(
 		EventSeq: &eventSeq,
 	}
 	return &BootstrapResult{
-		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore, Metrics: mreg,
+		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore, Metrics: mreg, Logger: log,
 	}, nil
 }
 

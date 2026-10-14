@@ -3,6 +3,7 @@ package trading
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/matching"
 	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
+	"github.com/ghrushneshr25/fakemarket/internal/observability/tracking"
 	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
 
@@ -47,6 +49,7 @@ type InstrumentExecutor struct {
 	onFault      func()
 	probe        ConcurrencyProbe
 	metrics      *metrics.Registry
+	log          *slog.Logger
 }
 
 // ConcurrencyProbe is optional observation of the per-instrument critical section.
@@ -92,6 +95,7 @@ type ExecutorDeps struct {
 	OnDurableFailure func()
 	Probe            ConcurrencyProbe
 	Metrics          *metrics.Registry // optional P7.2 phase timers
+	Logger           *slog.Logger      // optional lifecycle / durable-fail logs
 }
 
 // NewInstrumentExecutor constructs a single-instrument execution context.
@@ -148,6 +152,7 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 		onFault:      d.OnDurableFailure,
 		probe:        d.Probe,
 		metrics:      d.Metrics,
+		log:          d.Logger,
 	}, nil
 }
 
@@ -188,6 +193,14 @@ func (x *InstrumentExecutor) durableFail(err error) error {
 	x.faulted = true
 	if x.onFault != nil {
 		x.onFault()
+	}
+	if x.log != nil {
+		x.log.Error("trading.durable_fail",
+			tracking.AOperation("durable_fail"),
+			tracking.AOutcome("durable_fail"),
+			tracking.AInstrumentID(string(x.instrument.ID)),
+			tracking.AError(err),
+		)
 	}
 	return fmt.Errorf("%w: %w", ErrEngineUnavailable, err)
 }

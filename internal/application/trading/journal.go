@@ -2,10 +2,12 @@ package trading
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/event"
+	"github.com/ghrushneshr25/fakemarket/internal/observability/tracking"
 )
 
 // buildSubmitBatch collects all logical steps then one CommandBatch WAL record.
@@ -192,16 +194,33 @@ func (x *InstrumentExecutor) commitCancelBatch(cmd CancelOrderCommand, rem domai
 
 // appendCommandBatch assigns the next global event sequence and Appends under journalMu
 // so concurrent instruments cannot publish out-of-order sequences to the shared WAL.
+// corr is RequestID and is stored as Event.CorrelationID for log/WAL join.
 func (x *InstrumentExecutor) appendCommandBatch(kind, corr string, ts time.Time, steps []event.CommandStep) error {
 	x.journalMu.Lock()
 	defer x.journalMu.Unlock()
 	es := x.nextEventSeq()
+	eid := domain.EventID(fmt.Sprintf("EVT-%d", es))
 	batch, err := event.NewCommandBatch(event.Meta{
-		ID: domain.EventID(fmt.Sprintf("EVT-%d", es)), Sequence: es, Timestamp: ts,
+		ID: eid, Sequence: es, Timestamp: ts,
 		CorrelationID: corr,
 	}, kind, steps)
 	if err != nil {
 		return err
 	}
-	return x.wal.Append(batch)
+	if err := x.wal.Append(batch); err != nil {
+		return err
+	}
+	if x.log != nil {
+		x.log.Info("trading.wal_command_batch",
+			tracking.AOperation("wal_append"),
+			tracking.AOutcome("ok"),
+			tracking.ARequestID(corr),
+			tracking.AEventID(string(eid)),
+			tracking.AEventSeq(uint64(es)),
+			tracking.AInstrumentID(string(x.instrument.ID)),
+			slog.String("command_kind", kind),
+			slog.Int("step_count", len(steps)),
+		)
+	}
+	return nil
 }
