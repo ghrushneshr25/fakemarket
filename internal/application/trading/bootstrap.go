@@ -54,7 +54,12 @@ func BootstrapMulti(
 	mreg := metrics.New()
 	w, err := wal.Open(wal.Config{
 		Dir: walDir, SyncOnAppend: true,
-		OnAppend: func(ok bool, n int, d time.Duration) { mreg.ObserveWAL(ok, n, d) },
+		// P7.6 O1: concurrent Append callers may share one fsync; each still
+		// blocks until durable. Short wait lets multi-instrument peers join a batch
+		// without material sequential cost vs ~ms fsync.
+		GroupCommitMax:  32,
+		GroupCommitWait: 100 * time.Microsecond,
+		OnAppend:        func(ok bool, n int, d time.Duration) { mreg.ObserveWAL(ok, n, d) },
 	})
 	if err != nil {
 		return nil, err

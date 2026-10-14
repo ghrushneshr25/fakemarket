@@ -7,6 +7,7 @@ import (
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/event"
+	"github.com/ghrushneshr25/fakemarket/internal/matching"
 	"github.com/ghrushneshr25/fakemarket/internal/observability/tracking"
 )
 
@@ -44,9 +45,10 @@ func (x *InstrumentExecutor) commitSubmitBatch(
 		}
 	}
 
-	trades := x.engine.GeneratedTrades()
-	for i := x.tradeCursor; i < len(trades); i++ {
-		tr := trades[i].Trade
+	// One delta copy (P7.6 O3) — not full history × 3.
+	newTrades := x.engine.GeneratedTradesFrom(x.tradeCursor)
+	for _, gt := range newTrades {
+		tr := gt.Trade
 		if err := add(event.TradeExecutedPayload{
 			TradeID: tr.ID, InstrumentID: tr.InstrumentID,
 			BuyOrderID: tr.BuyOrderID, SellOrderID: tr.SellOrderID,
@@ -59,7 +61,7 @@ func (x *InstrumentExecutor) commitSubmitBatch(
 	}
 
 	// Reservation releases for fills / full fill — compute from post-match state
-	if err := x.appendReservationStepsForSubmit(oid, live, &steps); err != nil {
+	if err := x.appendReservationStepsForSubmit(oid, live, newTrades, &steps); err != nil {
 		return err
 	}
 
@@ -68,15 +70,15 @@ func (x *InstrumentExecutor) commitSubmitBatch(
 	}
 
 	// Apply local settlement + reservation store updates only after durable batch.
-	for i := x.tradeCursor; i < len(trades); i++ {
-		if err := x.settleTrade(trades[i].Trade); err != nil {
+	for _, gt := range newTrades {
+		if err := x.settleTrade(gt.Trade); err != nil {
 			return x.durableFail(err)
 		}
-		if err := x.applyLocalReservationAfterFill(trades[i].Trade); err != nil {
+		if err := x.applyLocalReservationAfterFill(gt.Trade); err != nil {
 			return x.durableFail(err)
 		}
 	}
-	x.tradeCursor = len(trades)
+	x.tradeCursor = x.engine.TradeCount()
 	if live.RemainingQuantity() == 0 {
 		if r, ok := x.res.Get(oid); ok {
 			_ = x.res.Release(oid)
@@ -86,14 +88,13 @@ func (x *InstrumentExecutor) commitSubmitBatch(
 	return nil
 }
 
-func (x *InstrumentExecutor) appendReservationStepsForSubmit(oid domain.OrderID, live *domain.Order, steps *[]event.CommandStep) error {
+func (x *InstrumentExecutor) appendReservationStepsForSubmit(oid domain.OrderID, live *domain.Order, newTrades []matching.GeneratedTrade, steps *[]event.CommandStep) error {
 	r, ok := x.res.Get(oid)
 	if !ok {
 		return nil
 	}
-	trades := x.engine.GeneratedTrades()[x.tradeCursor:]
 	cashLeft, posLeft := r.Cash, r.PositionQuantity
-	for _, gt := range trades {
+	for _, gt := range newTrades {
 		tr := gt.Trade
 		if tr.BuyOrderID != oid {
 			continue
@@ -192,18 +193,19 @@ func (x *InstrumentExecutor) commitCancelBatch(cmd CancelOrderCommand, rem domai
 	return nil
 }
 
-// appendCommandBatch assigns the next global event sequence and Appends under journalMu
-// so concurrent instruments cannot publish out-of-order sequences to the shared WAL.
+// appendCommandBatch assigns the next global event sequence under journalMu, then
+// Appends outside journalMu so WAL group-commit can coalesce concurrent instruments
+// (P7.6 O1). Sequence numbers remain strictly assigned; WAL flushes contiguous prefixes.
 // corr is RequestID and is stored as Event.CorrelationID for log/WAL join.
 func (x *InstrumentExecutor) appendCommandBatch(kind, corr string, ts time.Time, steps []event.CommandStep) error {
 	x.journalMu.Lock()
-	defer x.journalMu.Unlock()
 	es := x.nextEventSeq()
 	eid := domain.EventID(fmt.Sprintf("EVT-%d", es))
 	batch, err := event.NewCommandBatch(event.Meta{
 		ID: eid, Sequence: es, Timestamp: ts,
 		CorrelationID: corr,
 	}, kind, steps)
+	x.journalMu.Unlock()
 	if err != nil {
 		return err
 	}

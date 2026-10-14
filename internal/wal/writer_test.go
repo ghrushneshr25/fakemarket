@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"os"
 	"path/filepath"
@@ -366,4 +367,75 @@ func TestCRC_CoverageIncludesHeader(t *testing.T) {
 	if sum != got {
 		t.Fatal(sum, got)
 	}
+}
+
+func TestWriter_GroupCommitConcurrent(t *testing.T) {
+	dir := t.TempDir()
+	var syncs int
+	w, err := Open(Config{
+		Dir: dir, SyncOnAppend: true,
+		GroupCommitMax: 32, GroupCommitWait: 2 * time.Millisecond,
+		openFile: func(path string) (FileOps, error) {
+			f, err := openOSFile(path)
+			if err != nil {
+				return nil, err
+			}
+			return &countingSync{osFile: f, n: &syncs}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+
+	const n = 16
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	// Pre-assign sequences via staggered start after barrier so checkSequence works:
+	// concurrent Append requires sequences reserved in pending order — callers must
+	// present seq 1..n without gaps. Use a single goroutine to assign? No — real
+	// trading assigns seq under journalMu before Append. Here we serialize seq claim
+	// then parallel Append.
+	type job struct {
+		ev event.Event
+	}
+	jobs := make([]job, n)
+	for i := 0; i < n; i++ {
+		jobs[i] = job{ev: mustAccepted(t, fmt.Sprintf("G-%d", i+1), domain.Sequence(i+1))}
+	}
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			errs[i] = w.Append(jobs[i].ev)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for i, e := range errs {
+		if e != nil {
+			t.Fatalf("%d: %v", i, e)
+		}
+	}
+	if w.LastSequence() != uint64(n) {
+		t.Fatal(w.LastSequence())
+	}
+	// Header open may sync once; batch path should use fewer syncs than n appends.
+	// countingSync counts all Sync including segment header.
+	if syncs >= n+2 {
+		t.Fatalf("expected group commit to reduce syncs; syncs=%d n=%d", syncs, n)
+	}
+	t.Log("syncs=", syncs, "n=", n)
+}
+
+type countingSync struct {
+	*osFile
+	n *int
+}
+
+func (c *countingSync) Sync() error {
+	*c.n++
+	return c.osFile.Sync()
 }

@@ -70,9 +70,30 @@ func (e *Engine) GetOrder(id domain.OrderID) (*domain.Order, bool) {
 	return o, ok
 }
 
-// GeneratedTrades returns trades produced so far (append-only slice).
+// TradeCount returns the number of trades generated so far (no allocation).
+func (e *Engine) TradeCount() int { return len(e.trades) }
+
+// GeneratedTrades returns a defensive copy of all trades produced so far.
+// Prefer GeneratedTradesFrom for hot-path delta access (P7.6 O3).
 func (e *Engine) GeneratedTrades() []GeneratedTrade {
-	return append([]GeneratedTrade(nil), e.trades...)
+	return e.GeneratedTradesFrom(0)
+}
+
+// GeneratedTradesFrom returns a defensive copy of trades[from:].
+// from must be in [0, TradeCount()]; out-of-range from yields empty/full as appropriate.
+// Callers under InstrumentExecutor.x.mu may rely on engine single-writer safety for the
+// source slice during the copy; the returned slice is owned by the caller.
+func (e *Engine) GeneratedTradesFrom(from int) []GeneratedTrade {
+	n := len(e.trades)
+	if from < 0 {
+		from = 0
+	}
+	if from >= n {
+		return nil
+	}
+	out := make([]GeneratedTrade, n-from)
+	copy(out, e.trades[from:])
+	return out
 }
 
 // Execute runs one authoritative command through production logic.

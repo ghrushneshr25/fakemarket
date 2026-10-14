@@ -317,7 +317,7 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 	ts := x.clock()
 	// One WAL record (CommandBatch) = all-or-nothing durability for the command.
 	jStart := time.Now()
-	tradeN := len(x.engine.GeneratedTrades()) - x.tradeCursor
+	tradeN := x.engine.TradeCount() - x.tradeCursor
 	if err := x.commitSubmitBatch(cmd, oid, oseq, resv, live, ts); err != nil {
 		x.observePhase(metrics.PhaseJournal, "submit", jStart)
 		return SubmitOrderResult{}, x.durableFail(err)
