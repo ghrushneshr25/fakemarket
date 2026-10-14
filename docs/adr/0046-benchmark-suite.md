@@ -2,44 +2,67 @@
 
 **Status:** Accepted  
 **Date:** 2026-10-15  
-**Phase:** P7 — Performance & Observability  
+**Phase:** P7  
 **Milestone:** P7.4
 
 ## Decision
 
-Introduce a **reproducible benchmark harness** (`internal/bench`) that measures FakeMarket on the **direct Go trading path** using P7.2 latency phases.
+FakeMarket performance is measured by a **reproducible harness** (`internal/bench`) on the **real** `trading.Service` path (direct Go). No benchmark-only matching bypass.
 
-### Non-goals
+### Architecture
 
-- Hot-path optimization (P7.6)  
-- Claiming absolute production SLOs from one laptop  
-- Replacing P7.5 profiling  
-
-### Harness
-
-- Isolated temp WAL + `trading.BootstrapFull`  
-- Quiet logger  
-- Deep-pocket accounts for load  
-- Metrics registry available for phase scrape after run  
+```text
+generator (seeded) → scenario body → Service.Submit/Cancel
+                         │
+                    Recorder (P50–P99.9 wall)
+                         │
+              metrics scrape (executor_wait, matching, wal, …)
+```
 
 ### Workloads
 
-`no_match`, `full_match`, `partial_fill`, `cancel_heavy`, `mixed`, `hot_instrument_contention`, `scale_depth_*`
+| Name | Intent |
+|------|--------|
+| no_match | accept + book insert, no trade |
+| full_match | fill path + trades |
+| partial_fill | partial execution |
+| cancel_heavy | cancel path |
+| mixed | generator modes |
+| hot_instrument_contention | parallel workers → executor_wait |
+| multi_instrument | concurrent AAPL+TSLA harnesses |
+| scale_depth | resting book size |
 
-### Reporting
+### Scale
 
-- `testing.B` ns/op, allocs/op, B/op  
-- Optional log of Prometheus phase series (`executor_wait`, `matching`, `wal_append`, …)  
-- `CaptureEnv` / `BENCH_WRITE_ENV=1` for reproducibility sidecars  
+| Mode | `BENCH_SCALE` | Sizes |
+|------|---------------|-------|
+| default/CI | unset | 200, 2_000 |
+| 100k | `100k` | 100_000 |
+| full | `full` | 100_000, 1_000_000 (+ 10M manual) |
 
-### Seed
+### Latency
 
-Documented seed `42` for future RNG workloads; current deterministic loops use integer counters.
+- **Wall per command** via `Recorder` → P50/P95/P99/P99.9  
+- **Phases** via P7.2 Prometheus (nested, not additive)  
+- **Direct Go only** in primary baseline; gRPC separate if added later  
 
-### CI
+### WAL
 
-`make check` runs unit smoke `TestGoldenBaselineSmoke` only.  
-`make bench` runs short benches — not part of default check gate duration.
+Primary baseline: production durability (`SyncOnAppend=true` via Bootstrap).
+
+### Correctness
+
+- No panic  
+- `VerifyAccountsSanity` after scale runs  
+- Error rate reported; high error rate fails test  
+
+### Repro
+
+`CaptureEnv` + `docs/benchmarks/COMPARE.md` + optional JSON results.
+
+### Non-goals
+
+Optimization, changing fsync, lock-free books, silent durability downgrade.
 
 ## Status
 

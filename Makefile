@@ -64,6 +64,10 @@ check: fmt-check vet lint test build
 bench:
 	$(GO) test ./internal/bench/ -bench=. -benchmem -benchtime=200ms -count=1
 
+## bench-scale: fixed-N scale tests (set BENCH_SCALE=100k|full)
+bench-scale:
+	$(GO) test ./internal/bench/ -run 'Scale_' -count=1 -v
+
 ## fmt-check: verify formatting without writing changes
 fmt-check:
 	@unformatted=$$(gofmt -l .); \

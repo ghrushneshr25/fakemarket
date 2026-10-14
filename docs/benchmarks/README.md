@@ -13,20 +13,28 @@
 ## Commands
 
 ```bash
+# Unit smoke (part of make check)
+go test ./internal/bench/ -count=1
+
 # Quick CI-safe benches (short)
-go test ./internal/bench/ -bench=. -benchtime=200ms -count=1
-
-# Standard local baseline
-go test ./internal/bench/ -bench=. -benchmem -count=3
-
-# Write env sidecar files
-BENCH_WRITE_ENV=1 GIT_COMMIT=$(git rev-parse --short HEAD) \
-  go test ./internal/bench/ -bench=. -benchmem -count=1
-
-# Makefile
 make bench
+# = go test ./internal/bench/ -bench=. -benchmem -benchtime=200ms -count=1
+
+# Standard local baseline (testing.B)
+GIT_COMMIT=$(git rev-parse --short HEAD) \
+  go test ./internal/bench/ -bench=. -benchmem -count=3
+
+# Fixed-N scale runner with JSON latency percentiles (P50–P99.9)
+BENCH_SCALE=100k go test ./internal/bench/ -run 'Scale_NoMatch' -count=1 -v
+BENCH_SCALE=full  go test ./internal/bench/ -run 'Scale_' -count=1 -v   # long
+
+# Write env sidecars
+BENCH_WRITE_ENV=1 GIT_COMMIT=$(git rev-parse --short HEAD) make bench
 ```
 
+## Comparison
+
+See [COMPARE.md](./COMPARE.md).
 ## Workload matrix
 
 | Scenario | Package name | What it isolates |
