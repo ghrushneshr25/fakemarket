@@ -1050,7 +1050,7 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: 🔧 In progress (P7.2 next after P7.1 accept)
+### Phase status: 🔧 In progress (P7.4 benchmarks)
 
 ### CTO stance (locked)
 
@@ -1103,6 +1103,25 @@ Do NOT start hot-path engine optimization yet.
 4. Nested phases **not** additive to parent (documented)  
 5. `trades_total` on fills; bootstrap wiring  
 6. **No optimization** — measurement only  
+
+---
+
+## P7.4 — Benchmark Suite
+
+| | |
+|--|--|
+| **Status** | ✅ implemented — pending CTO accept |
+| **Code** | `internal/bench` |
+| **Docs** | [benchmarks/README.md](./benchmarks/README.md), [ADR 0046](./adr/0046-benchmark-suite.md) |
+
+### Delivered
+
+1. Harness: isolated BootstrapFull + metrics + env capture  
+2. Workloads: no-match, full-match, partial, cancel, mixed, contention, depth scale  
+3. Reports `executor_wait` / matching / wal via metrics scrape logs  
+4. `make bench` + CI smoke `TestGoldenBaselineSmoke`  
+5. Baseline template under `docs/benchmarks/results/`  
+6. **No hot-path optimization**  
 
 ---
 
@@ -1206,4 +1225,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — Nexus composition root (`internal/app`, ADR 0045); P7.2 latency boundaries in place.
+**Last updated:** 2026-10-15 — P7.4 benchmark suite (`internal/bench`, ADR 0046).

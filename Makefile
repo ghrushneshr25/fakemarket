@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet run check clean help proto e2e
+.PHONY: build test lint fmt vet run check clean help proto e2e bench
 APP_NAME := fakemarket
 CMD_PATH := ./cmd/fakemarket
 BIN_DIR  := bin
@@ -59,6 +59,10 @@ check: fmt-check vet lint test build
 	@echo "lint        PASS"
 	@echo "tests       PASS"
 	@echo "build       PASS"
+
+## bench: P7.4 short reproducible benches (not part of check duration)
+bench:
+	$(GO) test ./internal/bench/ -bench=. -benchmem -benchtime=200ms -count=1
 
 ## fmt-check: verify formatting without writing changes
 fmt-check:
