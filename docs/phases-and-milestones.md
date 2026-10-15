@@ -1159,13 +1159,13 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase status: 🔧 In progress (P8.3 storage failure next)
+### Phase status: 🔧 In progress (P8.3 storage — pending CTO accept)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P8.1 | Failure harness | 🟢 ACCEPTED (`155a7fb`) |
 | P8.2 | Process failure | 🟢 ACCEPTED (`db1a5a1`) |
-| P8.3 | Storage failure | ⏭️ NEXT |
+| P8.3 | Storage failure | ✅ implemented — pending CTO |
 | P8.4 | Network failure | ⏳ |
 | P8.5 | Duplicate / ordering | ⏳ |
 | P8.6 | Financial invariant verification | ⏳ |
@@ -1197,8 +1197,16 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ⏭️ **NEXT** |
-| **Focus** | WAL write/flush/fsync/partial/truncate/ENOSPC — persistence substrate |
+| **Status** | ✅ implemented — pending CTO |
+| **Code** | `internal/chaos/storage.go`, `storage_test.go` |
+| **Docs** | [P8.3-STORAGE.md](./chaos/P8.3-STORAGE.md), [ADR 0051](./adr/0051-storage-failure.md) |
+
+### Delivered
+
+1. FileOps storage injector (write/flush/sync/open/short/ENOSPC)  
+2. Corruption helpers + truncate/checksum/missing segment  
+3. Group-commit sync fail; rotation open fail; runtime disappear  
+4. No Close-after-fault durability lie; oracle reuse  
 
 ---
 
