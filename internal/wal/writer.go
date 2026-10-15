@@ -92,12 +92,37 @@ type Config struct {
 	// single-threaded callers typically still flush alone.
 	GroupCommitWait time.Duration
 
-	// openFile is for tests; nil uses os.
-	openFile func(path string) (FileOps, error)
+	// OpenFile opens segment files; nil uses DefaultOpenFile. Exported for chaos/tests (P8.1).
+	OpenFile func(path string) (FileOps, error)
+
+	// OnFault is optional test/chaos hook (P8.1). Nil = no-op.
+	// Non-nil error is treated like I/O failure at that boundary (or crash sentinel).
+	// Must not be set in production.
+	OnFault func(FaultPoint) error
 
 	// OnAppend is optional observability (P7.1). Must not affect durability semantics.
 	// ok=false includes encode/write/sync failures; n is record bytes on success path attempt.
 	OnAppend func(ok bool, n int, d time.Duration)
+}
+
+// FaultPoint identifies a WAL durability boundary for optional OnFault hooks (P8.1).
+type FaultPoint int
+
+const (
+	FaultBeforeAppend FaultPoint = iota + 1
+	FaultDuringWrite
+	FaultBeforeSync
+	FaultAfterSync // after successful Sync, before in-memory lastSequence commit
+)
+
+// DefaultOpenFile is the production segment opener.
+func DefaultOpenFile(path string) (FileOps, error) { return openOSFile(path) }
+
+func (w *Writer) fault(p FaultPoint) error {
+	if w.cfg.OnFault == nil {
+		return nil
+	}
+	return w.cfg.OnFault(p)
 }
 
 func (c *Config) normalize() error {
@@ -113,8 +138,8 @@ func (c *Config) normalize() error {
 	if c.GroupCommitMax <= 0 {
 		c.GroupCommitMax = 1
 	}
-	if c.openFile == nil {
-		c.openFile = func(path string) (FileOps, error) { return openOSFile(path) }
+	if c.OpenFile == nil {
+		c.OpenFile = DefaultOpenFile
 	}
 	// SyncOnAppend defaults true; zero value is false — set in Open if needed via pointer...
 	// Callers should set SyncOnAppend: true explicitly or we default in Open.
@@ -209,7 +234,7 @@ func segmentName(index uint64) string {
 func (w *Writer) openNextSegment() error {
 	w.segIndex++
 	path := filepath.Join(w.cfg.Dir, segmentName(w.segIndex))
-	f, err := w.cfg.openFile(path)
+	f, err := w.cfg.OpenFile(path)
 	if err != nil {
 		return fmt.Errorf("%w: open segment: %w", ErrWriteFailed, err)
 	}
@@ -329,6 +354,12 @@ func (w *Writer) Append(ev event.Event) error {
 	if recSize > w.cfg.MaxSegmentBytes {
 		w.mu.Unlock()
 		err = fmt.Errorf("%w: record %d > segment max %d", ErrRecordTooLarge, recSize, w.cfg.MaxSegmentBytes)
+		return err
+	}
+
+	// P8.1: before any durable I/O / group enqueue.
+	if err = w.fault(FaultBeforeAppend); err != nil {
+		w.mu.Unlock()
 		return err
 	}
 
@@ -523,15 +554,28 @@ func (w *Writer) appendOneLocked(rec []byte, seq uint64, id string, recSize int6
 			return err
 		}
 	}
+	if err := w.fault(FaultDuringWrite); err != nil {
+		w.faulted = true
+		return err
+	}
 	if err := writeFull(w.seg, rec); err != nil {
 		w.faulted = true
 		return fmt.Errorf("%w: %w", ErrWriteFailed, err)
 	}
 	// Sync flushes the buffer; avoid double Flush when SyncOnAppend (P7.6 micro).
 	if w.cfg.SyncOnAppend {
+		if err := w.fault(FaultBeforeSync); err != nil {
+			w.faulted = true
+			return err
+		}
 		if err := w.seg.Sync(); err != nil {
 			w.faulted = true
 			return fmt.Errorf("%w: %w", ErrSyncFailed, err)
+		}
+		if err := w.fault(FaultAfterSync); err != nil {
+			// Disk may already hold bytes; do not advance lastSequence (crash-after-fsync sim).
+			w.faulted = true
+			return err
 		}
 	} else {
 		if err := w.seg.Flush(); err != nil {
@@ -588,12 +632,21 @@ func (w *Writer) flushBatchLocked(batch []*gcItem) error {
 			return failRest(i, fmt.Errorf("%w: record does not fit empty segment", ErrRecordTooLarge))
 		}
 		for k := i; k < j; k++ {
+			if err := w.fault(FaultDuringWrite); err != nil {
+				return failRest(i, err)
+			}
 			if err := writeFull(w.seg, batch[k].rec); err != nil {
 				return failRest(i, fmt.Errorf("%w: %w", ErrWriteFailed, err))
 			}
 		}
+		if err := w.fault(FaultBeforeSync); err != nil {
+			return failRest(i, err)
+		}
 		if err := w.seg.Sync(); err != nil {
 			return failRest(i, fmt.Errorf("%w: %w", ErrSyncFailed, err))
+		}
+		if err := w.fault(FaultAfterSync); err != nil {
+			return failRest(i, err)
 		}
 		for k := i; k < j; k++ {
 			it := batch[k]
@@ -762,7 +815,7 @@ func (w *Writer) openForResume() error {
 	}
 	w.segIndex = maxIdx
 	path := filepath.Join(w.cfg.Dir, segmentName(maxIdx))
-	f, err := w.cfg.openFile(path)
+	f, err := w.cfg.OpenFile(path)
 	if err != nil {
 		return fmt.Errorf("%w: resume open: %w", ErrWriteFailed, err)
 	}

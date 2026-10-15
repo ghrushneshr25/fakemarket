@@ -1050,7 +1050,7 @@ Next phase: P7 Performance & Observability
 | P7.3 | Reproducible benchmarks (workloads A–E) with env metadata |
 | P7.4 | Optimize only with benchmark evidence |
 
-### Phase status: 🟢 P7 effectively CLOSED (P7.3 tracing deferred)
+### Phase status: 🟢 P7 CLOSED (P7.3 tracing deferred); P8.1 harness next
 
 ### CTO stance (locked)
 
@@ -1159,15 +1159,32 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase requirements (PRD)
+### Phase status: 🔧 In progress (P8.1 harness — pending CTO accept)
 
-| # | Requirement |
-|---|-------------|
-| P8.1 | Process/storage/network failure injection |
-| P8.2 | Invariants under chaos: no overfill, no phantom trades, no sequence regression |
-| P8.3 | Fuzz: orders, WAL, cancels, replay streams |
+| Milestone | Scope | Status |
+|-----------|--------|--------|
+| P8.1 | Failure harness | ✅ implemented — pending CTO |
+| P8.2 | Process failure | ⏳ |
+| P8.3 | Storage failure | ⏳ |
+| P8.4 | Network failure | ⏳ |
+| P8.5 | Duplicate / ordering | ⏳ |
+| P8.6 | Financial invariant verification | ⏳ |
 
-### Phase status: ⏳
+## P8.1 — Failure Harness
+
+| | |
+|--|--|
+| **Code** | `internal/chaos` |
+| **WAL hooks** | `Config.OnFault`, `OpenFile` exported |
+| **Docs** | [chaos/README.md](./chaos/README.md), [ADR 0049](./adr/0049-chaos-failure-harness.md) |
+
+### Delivered
+
+1. Deterministic Injector (FAIL_ONCE/N/ALWAYS, DELAY, BLOCK, CRASH)  
+2. WAL fault points incl. group-commit before/after sync  
+3. Scenario runner + isolated dirs + artifacts  
+4. Real `StartupRecover` restart; no Close-after-crash fsync lie  
+5. Harness self-tests; production OnFault nil  
 
 ---
 
@@ -1257,4 +1274,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P7.6 🟢 ACCEPTED; P7 closed (P7.3 tracing deferred).
+**Last updated:** 2026-10-15 — P8.1 chaos harness (pending CTO).

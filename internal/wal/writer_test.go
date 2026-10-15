@@ -191,7 +191,7 @@ func TestWriter_SyncFailureNotCommitted(t *testing.T) {
 	w, err := Open(Config{
 		Dir:          t.TempDir(),
 		SyncOnAppend: true,
-		openFile: func(path string) (FileOps, error) {
+		OpenFile: func(path string) (FileOps, error) {
 			f := &failSyncFile{name: path, fail: false}
 			files = append(files, f)
 			return f, nil
@@ -375,7 +375,7 @@ func TestWriter_GroupCommitConcurrent(t *testing.T) {
 	w, err := Open(Config{
 		Dir: dir, SyncOnAppend: true,
 		GroupCommitMax: 32, GroupCommitWait: 2 * time.Millisecond,
-		openFile: func(path string) (FileOps, error) {
+		OpenFile: func(path string) (FileOps, error) {
 			f, err := openOSFile(path)
 			if err != nil {
 				return nil, err
