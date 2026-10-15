@@ -1,6 +1,6 @@
 # ADR 0053 — Duplicate & Ordering Failure (P8.5)
 
-**Status:** Proposed (implementation complete; awaiting CTO)  
+**Status:** Accepted  
 **Date:** 2026-10-18  
 **Phase:** P8  
 **Milestone:** P8.5
@@ -21,4 +21,8 @@ P8.4 proved transport uncertainty. Clients still duplicate and reorder commands.
 
 ## Status
 
-Implemented for CTO review.
+Accepted (CTO — P8.5 CLOSED, commit `32456f0`).
+
+### Follow-up note
+
+ApplyEvent failure atomicity (e.g. `ReservationPartiallyReleased` may mutate temporary State before error return) is documented technical debt for later hardening; recovery discards failed State and does not set Ready.

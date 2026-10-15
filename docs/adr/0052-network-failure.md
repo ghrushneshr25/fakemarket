@@ -1,6 +1,6 @@
 # ADR 0052 — Network Failure & Transport Faults (P8.4)
 
-**Status:** Proposed (implementation complete; awaiting CTO)  
+**Status:** Accepted  
 **Date:** 2026-10-18  
 **Phase:** P8  
 **Milestone:** P8.4
@@ -27,4 +27,4 @@ P8.2/P8.3 proved process and storage recovery. Clients still observe timeouts, d
 
 ## Status
 
-Implemented for CTO review.
+Accepted (CTO — P8.4 CLOSED, commit `32456f0`).

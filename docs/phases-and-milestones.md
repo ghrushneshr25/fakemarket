@@ -1159,16 +1159,16 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase status: 🔧 In progress (P8.5 implemented — awaiting CTO)
+### Phase status: 🔧 In progress (P8.6 financial invariants next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P8.1 | Failure harness | 🟢 ACCEPTED (`155a7fb`) |
 | P8.2 | Process failure | 🟢 ACCEPTED (`db1a5a1`) |
 | P8.3 | Storage failure | 🟢 ACCEPTED (`9cc85e8` / `077c05d`) |
-| P8.4 | Network failure | 🟢 CLOSED (prior) |
-| P8.5 | Duplicate / ordering | 🔧 IMPLEMENTED (CTO review) |
-| P8.6 | Financial invariant verification | ⏳ |
+| P8.4 | Network failure | 🟢 CLOSED (`32456f0`) |
+| P8.5 | Duplicate / ordering | 🟢 ACCEPTED (`32456f0`) |
+| P8.6 | Financial invariant verification | ⏭️ NEXT |
 
 ## P8.1 — Failure Harness
 
@@ -1229,10 +1229,10 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (awaiting CTO) |
-| **Code** | `internal/chaos/ordering.go`, `ordering_test.go`, `ordering_wal_test.go` |
+| **Status** | 🟢 **ACCEPTED** (`32456f0`) |
+| **Code** | `internal/chaos/ordering.go`, `ordering_test.go`, `ordering_wal_test.go`, `internal/recovery/semantic_dup_p85_test.go` |
 | **Docs** | [P8.5-ORDERING.md](./chaos/P8.5-ORDERING.md), [ADR 0053](./adr/0053-duplicate-ordering.md) |
-| **Focus** | Command dup/reorder boundaries; event seq/EventID fail-closed; no durable idempotency |
+| **Focus** | Command dup/reorder boundaries; structural + semantic event protection; no durable idempotency |
 
 ### Delivered
 
@@ -1240,7 +1240,19 @@ Do NOT start hot-path engine optimization yet.
 2. Process-local vs restart idempotency evidence; fingerprint determinism  
 3. Cancel-after-fill; concurrent/multi-instrument; response-loss retry  
 4. WAL gap/dup/regression/EventID fail-closed + Ready=false  
-5. Deterministic replay oracle; race test; nil-hook regression  
+5. Semantic duplicates (TradeID/OrderID/reservation/lifecycle) via domain ApplyEvent guards  
+6. Deterministic replay oracle; race test; nil-hook regression  
+
+### Follow-up (not P8.5 scope)
+
+- ApplyEvent failure atomicity (partial in-memory mutation on failed apply; recovery discards State)
+
+## P8.6 — Financial Invariant Verification
+
+| | |
+|--|--|
+| **Status** | ⏭️ **NEXT** |
+| **Focus** | Systematic financial invariant campaign over recovered/live state |
 
 ---
 
@@ -1330,4 +1342,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P8.5 Duplicate & Ordering implemented (CTO review).
+**Last updated:** 2026-10-18 — P8.5 🟢 ACCEPTED (`32456f0`); P8.6 Financial Invariants next.
