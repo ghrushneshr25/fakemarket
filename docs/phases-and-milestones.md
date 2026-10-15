@@ -1159,15 +1159,15 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase status: 🔧 In progress (P8.4 network failure next)
+### Phase status: 🔧 In progress (P8.5 implemented — awaiting CTO)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P8.1 | Failure harness | 🟢 ACCEPTED (`155a7fb`) |
 | P8.2 | Process failure | 🟢 ACCEPTED (`db1a5a1`) |
 | P8.3 | Storage failure | 🟢 ACCEPTED (`9cc85e8` / `077c05d`) |
-| P8.4 | Network failure | ⏭️ NEXT |
-| P8.5 | Duplicate / ordering | ⏳ |
+| P8.4 | Network failure | 🟢 CLOSED (prior) |
+| P8.5 | Duplicate / ordering | 🔧 IMPLEMENTED (CTO review) |
 | P8.6 | Financial invariant verification | ⏳ |
 
 ## P8.1 — Failure Harness
@@ -1212,8 +1212,35 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ⏭️ **NEXT** |
+| **Status** | 🟢 **CLOSED** (prior milestone) |
+| **Code** | `internal/chaos/network.go`, `network_harness.go`, `network_test.go`, `network_oracle_test.go` |
+| **Docs** | [P8.4-NETWORK.md](./chaos/P8.4-NETWORK.md), [ADR 0052](./adr/0052-network-failure.md) |
 | **Focus** | Transport faults: disconnect, timeout, loss — not WAL redesign |
+
+### Delivered
+
+1. `NetworkFaults` gRPC unary interceptors (request/response drop, delay, cancel, reset)  
+2. Real TradingService + Query over bufconn; nil hooks = production path  
+3. Unknown-outcome: WAL success + response loss; timeout ≠ rejection  
+4. Reconciliation via Query; process-local idempotency only  
+5. Partial fill + cancel + multi-instrument + concurrent + recovery/oracle  
+
+## P8.5 — Duplicate & Ordering Failure
+
+| | |
+|--|--|
+| **Status** | 🔧 **IMPLEMENTED** (awaiting CTO) |
+| **Code** | `internal/chaos/ordering.go`, `ordering_test.go`, `ordering_wal_test.go` |
+| **Docs** | [P8.5-ORDERING.md](./chaos/P8.5-ORDERING.md), [ADR 0053](./adr/0053-duplicate-ordering.md) |
+| **Focus** | Command dup/reorder boundaries; event seq/EventID fail-closed; no durable idempotency |
+
+### Delivered
+
+1. `OrderingFaults` / `OrderingRunner` — deterministic delivery/dup/reorder on real TradingService  
+2. Process-local vs restart idempotency evidence; fingerprint determinism  
+3. Cancel-after-fill; concurrent/multi-instrument; response-loss retry  
+4. WAL gap/dup/regression/EventID fail-closed + Ready=false  
+5. Deterministic replay oracle; race test; nil-hook regression  
 
 ---
 
@@ -1303,4 +1330,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P8.3 🟢 ACCEPTED; P8.4 Network Failure next.
+**Last updated:** 2026-10-18 — P8.5 Duplicate & Ordering implemented (CTO review).

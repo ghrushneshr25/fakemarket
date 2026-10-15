@@ -40,10 +40,24 @@ func idemKey(account, key string) string {
 	return account + "\x00" + key
 }
 
+// FingerprintSubmit is the process-local submit fingerprint (P6/P8.5).
+// Value-based only: no pointer addresses, map order, or random fields.
+func FingerprintSubmit(c SubmitOrderCommand) string { return fingerprintSubmit(c) }
+
+// FingerprintCancel is the process-local cancel fingerprint.
+func FingerprintCancel(c CancelOrderCommand) string { return fingerprintCancel(c) }
+
 func fingerprintSubmit(c SubmitOrderCommand) string {
 	h := sha256.New()
-	_, _ = fmt.Fprintf(h, "S|%s|%s|%s|%s|%v|%d|%s",
-		c.AccountID, c.InstrumentID, c.Side, c.Type, c.Price, c.Quantity, c.TimeInForce)
+	// Price must be value-based (not pointer address) so gRPC retries match.
+	var px string
+	if c.Price != nil {
+		px = fmt.Sprintf("%d", int64(*c.Price))
+	} else {
+		px = "nil"
+	}
+	_, _ = fmt.Fprintf(h, "S|%s|%s|%s|%s|%s|%d|%s",
+		c.AccountID, c.InstrumentID, c.Side, c.Type, px, c.Quantity, c.TimeInForce)
 	return hex.EncodeToString(h.Sum(nil))
 }
 

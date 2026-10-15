@@ -49,6 +49,15 @@ res, err := r.RunWALScenario(chaos.Scenario{
 })
 ```
 
+## Milestone docs
+
+| Doc | Scope |
+|-----|--------|
+| [P8.2-PROCESS.md](./P8.2-PROCESS.md) | OS process crash |
+| [P8.3-STORAGE.md](./P8.3-STORAGE.md) | FileOps / WAL I/O |
+| [P8.4-NETWORK.md](./P8.4-NETWORK.md) | Transport / gRPC faults |
+| [P8.5-ORDERING.md](./P8.5-ORDERING.md) | Duplicate commands / event ordering |
+
 ## What P8.1 does **not** prove
 
 Full process kill, network faults, duplicate client retries, full balance/position oracle (P8.2–P8.6).

@@ -24,6 +24,13 @@ type BootstrapResult struct {
 	Logger   *slog.Logger
 }
 
+// WALHooks are optional production-nil injection points for chaos tests (P8.3/P8.4).
+// Never set in production bootstrap paths.
+type WALHooks struct {
+	OpenFile func(path string) (wal.FileOps, error)
+	OnFault  func(wal.FaultPoint) error
+}
+
 // Bootstrap builds a ready TradingService for tests/simulators (direct Go path).
 func Bootstrap(walDir string, inst domain.Instrument, accounts map[domain.AccountID]*domain.Account) (*Service, *wal.Writer, error) {
 	res, err := BootstrapMulti(walDir, accounts, nil, inst)
@@ -49,6 +56,17 @@ func BootstrapMulti(
 	probes map[domain.InstrumentID]ConcurrencyProbe,
 	instruments ...domain.Instrument,
 ) (*BootstrapResult, error) {
+	return BootstrapMultiHooks(walDir, accounts, probes, nil, instruments...)
+}
+
+// BootstrapMultiHooks is BootstrapMulti with optional WAL chaos hooks (nil = production).
+func BootstrapMultiHooks(
+	walDir string,
+	accounts map[domain.AccountID]*domain.Account,
+	probes map[domain.InstrumentID]ConcurrencyProbe,
+	hooks *WALHooks,
+	instruments ...domain.Instrument,
+) (*BootstrapResult, error) {
 	if len(instruments) == 0 {
 		return nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
 	}
@@ -59,13 +77,18 @@ func BootstrapMulti(
 	case "0", "off", "1", "legacy":
 		gcMax, gcWait = 1, 0
 	}
-	w, err := wal.Open(wal.Config{
+	wcfg := wal.Config{
 		Dir: walDir, SyncOnAppend: true,
 		// Concurrent Append callers may share one fsync; each still blocks until durable.
 		GroupCommitMax:  gcMax,
 		GroupCommitWait: gcWait,
 		OnAppend:        func(ok bool, n int, d time.Duration) { mreg.ObserveWAL(ok, n, d) },
-	})
+	}
+	if hooks != nil {
+		wcfg.OpenFile = hooks.OpenFile
+		wcfg.OnFault = hooks.OnFault
+	}
+	w, err := wal.Open(wcfg)
 	if err != nil {
 		return nil, err
 	}
