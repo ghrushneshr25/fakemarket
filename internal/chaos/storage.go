@@ -183,6 +183,11 @@ func (f *faultyStorageFile) Flush() error {
 }
 
 func (f *faultyStorageFile) Sync() error {
+	// Mirror production osFile.Sync: Flush then fsync. Intercepting Flush here
+	// allows SyncOnAppend=true Flush-failure tests (CTO P8.3.1).
+	if err := f.Flush(); err != nil {
+		return err
+	}
 	f.sf.mu.Lock()
 	f.sf.bump("sync")
 	err := f.sf.matchLocked("sync")

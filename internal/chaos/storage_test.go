@@ -172,7 +172,11 @@ func TestP83_Storage_SyncFail_NoAck(t *testing.T) {
 	if w.LastSequence() != 0 || !w.Faulted() {
 		t.Fatalf("seq=%d faulted=%v err=%v", w.LastSequence(), w.Faulted(), err)
 	}
-	p83RecoverSeq(t, dir, 0)
+	// Writer did not ack. Local FS may still read flushed-but-unsynced bytes after
+	// Flush succeeded inside Sync before fsync failed — that is not Append==nil durability.
+	if err := w.Append(p83Batch(t, 1)); !errors.Is(err, wal.ErrWALFaulted) {
+		t.Fatal(err)
+	}
 }
 
 func TestP83_Storage_FlushFail_NonSyncMode(t *testing.T) {
