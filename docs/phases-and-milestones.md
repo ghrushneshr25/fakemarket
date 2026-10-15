@@ -1159,13 +1159,13 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase status: 🔧 In progress (P8.2 process crash — pending CTO accept)
+### Phase status: 🔧 In progress (P8.3 storage failure next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P8.1 | Failure harness | 🟢 ACCEPTED (`155a7fb`) |
-| P8.2 | Process failure | ✅ implemented — pending CTO |
-| P8.3 | Storage failure | ⏳ |
+| P8.2 | Process failure | 🟢 ACCEPTED (`db1a5a1`) |
+| P8.3 | Storage failure | ⏭️ NEXT |
 | P8.4 | Network failure | ⏳ |
 | P8.5 | Duplicate / ordering | ⏳ |
 | P8.6 | Financial invariant verification | ⏳ |
@@ -1182,17 +1182,23 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
+| **Status** | 🟢 **ACCEPTED** (`db1a5a1`) |
 | **Code** | `internal/chaos/process.go`, `oracle.go`, `multi_process.go` |
 | **Docs** | [P8.2-PROCESS.md](./chaos/P8.2-PROCESS.md), [ADR 0050](./adr/0050-process-crash-recovery.md) |
 
 ### Delivered
 
 1. Real OS process boundary (re-exec worker)  
-2. Independent oracle (`OpenReader`+`ApplyEvent`) vs `StartupRecover`  
-3. Crash before/after sync, before append, during write  
-4. Multi-instrument shared-WAL group-commit crash  
-5. ResumeWriter + post-recovery append + second restart  
-6. Recovery idempotence  
+2. Independent oracle vs `StartupRecover`  
+3. Crash before/after sync; multi-instrument group-commit crash  
+4. ResumeWriter + second restart; recovery idempotence  
+
+## P8.3 — Storage Failure
+
+| | |
+|--|--|
+| **Status** | ⏭️ **NEXT** |
+| **Focus** | WAL write/flush/fsync/partial/truncate/ENOSPC — persistence substrate |
 
 ---
 
@@ -1282,4 +1288,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P8.2 process crash recovery (pending CTO).
+**Last updated:** 2026-10-15 — P8.2 🟢 ACCEPTED; P8.3 Storage Failure next.
