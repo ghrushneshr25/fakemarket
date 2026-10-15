@@ -79,14 +79,21 @@ func cloneAccounts(in map[domain.AccountID]*domain.Account) map[domain.AccountID
 		if v == nil {
 			continue
 		}
-		// NewAccount from cash; positions copied if any.
 		a, err := domain.NewAccount(domain.AccountParams{
 			ID: k, Currency: v.Currency, Cash: v.Cash(),
 		})
 		if err != nil {
 			continue
 		}
-		// Best-effort position clone via snapshot if available.
+		// Copy seed inventory (required for sell-side trade settlement on recover).
+		for _, p := range v.Positions() {
+			if p.Quantity <= 0 {
+				continue
+			}
+			if err := a.AddToPosition(p.InstrumentID, p.Quantity, p.AveragePrice); err != nil {
+				continue
+			}
+		}
 		out[k] = &a
 	}
 	return out

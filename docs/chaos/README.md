@@ -57,6 +57,7 @@ res, err := r.RunWALScenario(chaos.Scenario{
 | [P8.3-STORAGE.md](./P8.3-STORAGE.md) | FileOps / WAL I/O |
 | [P8.4-NETWORK.md](./P8.4-NETWORK.md) | Transport / gRPC faults |
 | [P8.5-ORDERING.md](./P8.5-ORDERING.md) | Duplicate commands / event ordering |
+| [P8.6-INVARIANTS.md](./P8.6-INVARIANTS.md) | Financial invariant verification |
 
 ## What P8.1 does **not** prove
 
