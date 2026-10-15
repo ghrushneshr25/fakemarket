@@ -30,16 +30,13 @@ func p86OracleVerify(t *testing.T, dir string, insts []domain.Instrument, seed m
 	for _, in := range insts {
 		_ = ireg.Register(in)
 	}
-	// Fresh seed clone for fold.
+	base := invariants.SnapshotBaseline(seed)
 	seed2 := p86Clone(seed)
 	c, st, err := chaos.OracleFromWAL(dir, ireg, seed2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := invariants.VerifyCanonical(c); err != nil {
-		t.Fatal(err)
-	}
-	if err := invariants.VerifyState(st); err != nil {
+	if err := invariants.VerifyStateWithBaseline(base, st); err != nil {
 		t.Fatal(err)
 	}
 	_, got, err := chaos.CompareRecovered(dir, ireg, p86Clone(seed))
@@ -49,6 +46,15 @@ func p86OracleVerify(t *testing.T, dir string, insts []domain.Instrument, seed m
 	if err := invariants.VerifyCanonical(got); err != nil {
 		t.Fatal(err)
 	}
+	// Recovered state conservation (independent fold again).
+	_, st2, err := chaos.OracleFromWAL(dir, ireg, p86Clone(seed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := invariants.VerifyConservation(base, st2); err != nil {
+		t.Fatal(err)
+	}
+	_ = c
 }
 
 func p86Clone(in map[domain.AccountID]*domain.Account) map[domain.AccountID]*domain.Account {
@@ -381,9 +387,73 @@ func TestP86_Property_DeterministicSeed(t *testing.T) {
 }
 
 func TestP86_SemanticDup_InvariantsHoldOnPrefix(t *testing.T) {
-	// After rejecting semantic dup, prefix state still verifies.
-	// Covered in invariants package; ensure chaos linkage.
 	t.Log("see TestP85_SemanticDup_* + VerifyState on prefix")
+}
+
+func TestP86_CrashRecovery_CashPositionConservation(t *testing.T) {
+	// initial → trades → close WAL → recover → expected cash/pos from baseline+trades
+	dir := t.TempDir()
+	seed0 := p86Accts(t)
+	base := invariants.SnapshotBaseline(seed0)
+	initA1 := base.Cash["A1"]
+	initA2 := base.Cash["A2"]
+	initPosA2 := base.Positions["A2"]["AAPL"]
+
+	boot, err := trading.BootstrapMulti(dir, p86Clone(seed0), nil, trading.MustInstrument("AAPL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := domain.Price(100)
+	_, err = boot.Service.Submit(context.Background(), trading.SubmitOrderCommand{
+		AccountID: "A2", InstrumentID: "AAPL", Side: domain.SideSell,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = boot.Service.Submit(context.Background(), trading.SubmitOrderCommand{
+		AccountID: "A1", InstrumentID: "AAPL", Side: domain.SideBuy,
+		Type: domain.OrderTypeLimit, Price: &px, Quantity: 7,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = boot.WAL.Close()
+
+	ireg := domain.NewInstrumentRegistry()
+	_ = ireg.Register(trading.MustInstrument("AAPL"))
+	_, st, err := chaos.OracleFromWAL(dir, ireg, p86Clone(seed0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := invariants.VerifyStateWithBaseline(base, st); err != nil {
+		t.Fatal(err)
+	}
+	notional := domain.Money(700) // 100*7, tick=1
+	if st.Accounts["A1"].Cash() != initA1-notional {
+		t.Fatalf("A1 cash %d want %d", st.Accounts["A1"].Cash(), initA1-notional)
+	}
+	if st.Accounts["A2"].Cash() != initA2+notional {
+		t.Fatalf("A2 cash %d want %d", st.Accounts["A2"].Cash(), initA2+notional)
+	}
+	p1, _ := st.Accounts["A1"].GetPosition("AAPL")
+	if p1.Quantity != 7 {
+		t.Fatal(p1.Quantity)
+	}
+	p2, _ := st.Accounts["A2"].GetPosition("AAPL")
+	if p2.Quantity != initPosA2-7 {
+		t.Fatal(p2.Quantity, initPosA2)
+	}
+	// StartupRecover matches.
+	sr, err := recovery.StartupRecover(recovery.StartupConfig{
+		WALDir: dir, Mode: recovery.ModeStrict, Instruments: ireg, Accounts: p86Clone(seed0),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := invariants.VerifyStateWithBaseline(base, sr.Recovery.State); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestP86_NilProduction_Unchanged(t *testing.T) {
