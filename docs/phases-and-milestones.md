@@ -1159,12 +1159,12 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase status: 🔧 In progress (P8.1 harness — pending CTO accept)
+### Phase status: 🔧 In progress (P8.2 process crash — pending CTO accept)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
-| P8.1 | Failure harness | ✅ implemented — pending CTO |
-| P8.2 | Process failure | ⏳ |
+| P8.1 | Failure harness | 🟢 ACCEPTED (`155a7fb`) |
+| P8.2 | Process failure | ✅ implemented — pending CTO |
 | P8.3 | Storage failure | ⏳ |
 | P8.4 | Network failure | ⏳ |
 | P8.5 | Duplicate / ordering | ⏳ |
@@ -1174,17 +1174,25 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
+| **Status** | 🟢 **ACCEPTED** |
 | **Code** | `internal/chaos` |
-| **WAL hooks** | `Config.OnFault`, `OpenFile` exported |
 | **Docs** | [chaos/README.md](./chaos/README.md), [ADR 0049](./adr/0049-chaos-failure-harness.md) |
+
+## P8.2 — Process Failure & Crash Recovery
+
+| | |
+|--|--|
+| **Code** | `internal/chaos/process.go`, `oracle.go`, `multi_process.go` |
+| **Docs** | [P8.2-PROCESS.md](./chaos/P8.2-PROCESS.md), [ADR 0050](./adr/0050-process-crash-recovery.md) |
 
 ### Delivered
 
-1. Deterministic Injector (FAIL_ONCE/N/ALWAYS, DELAY, BLOCK, CRASH)  
-2. WAL fault points incl. group-commit before/after sync  
-3. Scenario runner + isolated dirs + artifacts  
-4. Real `StartupRecover` restart; no Close-after-crash fsync lie  
-5. Harness self-tests; production OnFault nil  
+1. Real OS process boundary (re-exec worker)  
+2. Independent oracle (`OpenReader`+`ApplyEvent`) vs `StartupRecover`  
+3. Crash before/after sync, before append, during write  
+4. Multi-instrument shared-WAL group-commit crash  
+5. ResumeWriter + post-recovery append + second restart  
+6. Recovery idempotence  
 
 ---
 
@@ -1274,4 +1282,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P8.1 chaos harness (pending CTO).
+**Last updated:** 2026-10-15 — P8.2 process crash recovery (pending CTO).

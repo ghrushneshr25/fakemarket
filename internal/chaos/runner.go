@@ -41,6 +41,7 @@ func (r *Runner) RunWALScenario(sc Scenario) (Result, error) {
 		return res, err
 	}
 	sc.WALDir = walDir
+	res.Scenario = sc
 	res.ArtifactDir = artDir
 
 	inj := NewInjector()
