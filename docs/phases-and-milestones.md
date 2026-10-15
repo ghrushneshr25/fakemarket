@@ -1159,14 +1159,14 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase status: 🔧 In progress (P8.3 storage — pending CTO accept)
+### Phase status: 🔧 In progress (P8.4 network failure next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P8.1 | Failure harness | 🟢 ACCEPTED (`155a7fb`) |
 | P8.2 | Process failure | 🟢 ACCEPTED (`db1a5a1`) |
-| P8.3 | Storage failure | ✅ implemented — pending CTO |
-| P8.4 | Network failure | ⏳ |
+| P8.3 | Storage failure | 🟢 ACCEPTED (`9cc85e8` / `077c05d`) |
+| P8.4 | Network failure | ⏭️ NEXT |
 | P8.5 | Duplicate / ordering | ⏳ |
 | P8.6 | Financial invariant verification | ⏳ |
 
@@ -1197,16 +1197,23 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | ✅ implemented — pending CTO |
-| **Code** | `internal/chaos/storage.go`, `storage_test.go` |
+| **Status** | 🟢 **ACCEPTED** (`9cc85e8` / `077c05d`) |
+| **Code** | `internal/chaos/storage.go`, `storage_test.go`, `storage_gaps_test.go` |
 | **Docs** | [P8.3-STORAGE.md](./chaos/P8.3-STORAGE.md), [ADR 0051](./adr/0051-storage-failure.md) |
 
 ### Delivered
 
 1. FileOps storage injector (write/flush/sync/open/short/ENOSPC)  
-2. Corruption helpers + truncate/checksum/missing segment  
-3. Group-commit sync fail; rotation open fail; runtime disappear  
-4. No Close-after-fault durability lie; oracle reuse  
+2. Flush-fail inside SyncOnAppend; corruption matrix → not Ready  
+3. Lifecycle N→fail→recover→Resume N+1; multi-instrument shared WAL fail  
+4. Rotation header write/sync fail; oracle reuse; no durability lie  
+
+## P8.4 — Network Failure
+
+| | |
+|--|--|
+| **Status** | ⏭️ **NEXT** |
+| **Focus** | Transport faults: disconnect, timeout, loss — not WAL redesign |
 
 ---
 
@@ -1296,4 +1303,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-15 — P8.2 🟢 ACCEPTED; P8.3 Storage Failure next.
+**Last updated:** 2026-10-15 — P8.3 🟢 ACCEPTED; P8.4 Network Failure next.
