@@ -1159,7 +1159,7 @@ Do NOT start hot-path engine optimization yet.
 
 # P8 — Reliability
 
-### Phase status: 🔧 In progress (P8.6 implemented — awaiting CTO)
+### Phase status: 🟢 COMPLETE — P9 Distributed next
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
@@ -1168,7 +1168,7 @@ Do NOT start hot-path engine optimization yet.
 | P8.3 | Storage failure | 🟢 ACCEPTED (`9cc85e8` / `077c05d`) |
 | P8.4 | Network failure | 🟢 CLOSED (`32456f0`) |
 | P8.5 | Duplicate / ordering | 🟢 ACCEPTED (`32456f0`) |
-| P8.6 | Financial invariant verification | 🔧 IMPLEMENTED (CTO review) |
+| P8.6 | Financial invariant verification | 🟢 ACCEPTED (`8d577df` / `f35e37a`) |
 
 ## P8.1 — Failure Harness
 
@@ -1251,7 +1251,7 @@ Do NOT start hot-path engine optimization yet.
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (awaiting CTO) |
+| **Status** | 🟢 **ACCEPTED** (`8d577df` / `f35e37a`) |
 | **Code** | `internal/invariants/`, `internal/chaos/invariants_p86_test.go` |
 | **Docs** | [P8.6-INVARIANTS.md](./chaos/P8.6-INVARIANTS.md), [ADR 0054](./adr/0054-financial-invariants.md) |
 | **Focus** | Executable financial invariants + WAL oracle + chaos histories |
@@ -1260,9 +1260,26 @@ Do NOT start hot-path engine optimization yet.
 
 1. Read-only `VerifyCanonical` / `VerifyState` with structured violations  
 2. Order/trade/book/reservation/cash/position catalog (domain-derived equations)  
-3. Chaos P86_ matrix: partial fill, cancel, crash recovery, network loss, multi-instrument, property seed  
-4. Fuzz target `FuzzApplyEvent_NoPanic`  
-5. ApplyEvent failure-atomicity envelope evidence; oracle `cloneAccounts` copies positions  
+3. **P12/P13 conservation:** `Baseline` + `DeriveExpected` (cash/pos vs trades)  
+4. Chaos P86_ matrix: partial fill, cancel, crash recovery, network loss, multi-instrument, property seed  
+5. Fuzz target `FuzzApplyEvent_NoPanic`  
+6. ApplyEvent failure-atomicity envelope evidence; oracle `cloneAccounts` copies positions  
+
+### P8 complete
+
+Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened).
+
+---
+
+# P9 — Distributed Exchange
+
+### Phase status: ⏳ Not started
+
+| Milestone | Scope | Status |
+|-----------|--------|--------|
+| P9.1 | Instrument sharding | ⏭️ NEXT |
+| P9.2 | Shard ownership + failover | ⏳ |
+| P9.3 | Replication / split-brain protection | ⏳ |
 
 ---
 
@@ -1352,4 +1369,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P8.6 Financial Invariants implemented (CTO review).
+**Last updated:** 2026-10-18 — P8 🟢 COMPLETE (`8d577df`); P9.1 Instrument Sharding next.

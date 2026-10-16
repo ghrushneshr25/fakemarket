@@ -1,6 +1,6 @@
 # ADR 0054 — Financial Invariant Verification (P8.6)
 
-**Status:** Proposed (implementation complete; awaiting CTO)  
+**Status:** Accepted  
 **Date:** 2026-10-18  
 **Phase:** P8  
 **Milestone:** P8.6
@@ -23,4 +23,8 @@ P8.1–P8.5 proved failure boundaries. P8.6 makes financial consistency executab
 
 ## Status
 
-Implemented for CTO review.
+Accepted (CTO — P8.6 CLOSED, commits `f35e37a` / `8d577df`). P8 Reliability & Chaos complete.
+
+### Follow-up
+
+Transactional ApplyEvent failure atomicity remains tech debt for pre-P9 hardening.
