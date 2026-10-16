@@ -75,6 +75,11 @@ type Registry struct {
 	WorkerEnqueues     *prometheus.CounterVec // worker=
 	WorkerQueueRejects *prometheus.CounterVec // worker=
 	WorkerDrainSeconds *prometheus.HistogramVec
+
+	// P9.3 ownership (bounded owner/shard labels by topology size)
+	OwnershipAcquireTotal *prometheus.CounterVec // owner, shard, result=
+	OwnershipReleaseTotal *prometheus.CounterVec // owner, shard
+	OwnershipFenceTotal   *prometheus.CounterVec // reason=
 }
 
 // latencyBuckets are fixed µs–ms style buckets for exchange ops (seconds).
@@ -133,7 +138,39 @@ func New() *Registry {
 	m.WorkerQueueRejects = mustCounterVec(r, "fakemarket_worker_queue_rejections_total", "Worker queue full rejections", "worker")
 	m.WorkerDrainSeconds = mustHistVec(r, "fakemarket_worker_drain_duration_seconds", "Worker drain duration on shutdown", "worker")
 
+	m.OwnershipAcquireTotal = mustCounterVec(r, "fakemarket_ownership_acquire_total", "Shard ownership acquire attempts (P9.3)", "owner", "shard", "result")
+	m.OwnershipReleaseTotal = mustCounterVec(r, "fakemarket_ownership_release_total", "Shard ownership releases", "owner", "shard")
+	m.OwnershipFenceTotal = mustCounterVec(r, "fakemarket_ownership_fencing_rejections_total", "Stale/not-owner fencing rejections", "reason")
+
 	return m
+}
+
+// ObserveOwnershipAcquire records acquire ok/fail.
+func (m *Registry) ObserveOwnershipAcquire(owner, shard string, ok bool) {
+	if m == nil {
+		return
+	}
+	r := "ok"
+	if !ok {
+		r = "error"
+	}
+	m.OwnershipAcquireTotal.WithLabelValues(owner, shard, r).Inc()
+}
+
+// ObserveOwnershipRelease records release.
+func (m *Registry) ObserveOwnershipRelease(owner, shard string) {
+	if m == nil {
+		return
+	}
+	m.OwnershipReleaseTotal.WithLabelValues(owner, shard).Inc()
+}
+
+// ObserveOwnershipFence records fencing rejection reason (bounded).
+func (m *Registry) ObserveOwnershipFence(reason string) {
+	if m == nil {
+		return
+	}
+	m.OwnershipFenceTotal.WithLabelValues(reason).Inc()
 }
 
 // ObserveWorkerEnqueue records a successful enqueue.

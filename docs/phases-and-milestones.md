@@ -1273,14 +1273,38 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.3 Shard Ownership next)
+### Phase status: 🔧 In progress (P9.3 implemented — CTO acceptance pending)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
 | P9.2 | Multi-worker execution | 🟢 ACCEPTED (`28f3d1f` / `79f3e89`) |
-| P9.3 | Shard ownership | ⏭️ NEXT |
+| P9.3 | Shard ownership | 🔧 IMPLEMENTED (ADR 0057; formal accept pending) |
 | P9.4+ | Replication / consensus / failover | ⏳ |
+
+## P9.3 — Shard Ownership
+
+| | |
+|--|--|
+| **Status** | 🔧 **IMPLEMENTED** (in-process; CTO 🟢 pending) |
+| **Code** | `trading/ownership.go`, `ownership_test.go`, worker fencing in `worker.go`, metrics |
+| **Docs** | [P9.3-SHARD-OWNERSHIP.md](./distributed/P9.3-SHARD-OWNERSHIP.md), [ADR 0057](./adr/0057-shard-ownership.md) |
+
+### Delivered
+
+1. `OwnerID`, `OwnershipToken`, `ShardOwnership`, states UNOWNED→OWNED→RELEASING  
+2. `OwnershipRegistry`: Acquire / Release / Validate; monotonic epoch  
+3. Bootstrap acquire-all-shards; shutdown release-all after drain  
+4. Fencing at enqueue + exec (before match/res/WAL)  
+5. Stale owner → zero financial mutation (cash + WAL seq unchanged)  
+6. Concurrent same-shard single winner; multi-shard parallel acquire  
+7. Metrics: acquire/release/fencing; fuzz + race green  
+
+### Carry-forward to P9.4+
+
+Exactly one authoritative owner per shard while OWNED; epoch fencing; control-plane ownership (not financial WAL); no multi-process/consensus yet.
+
+---
 
 ## P9.2 — Multi-Worker Execution
 
@@ -1419,4 +1443,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.2 🟢 ACCEPTED (`28f3d1f`); P9.3 Shard Ownership next.
+**Last updated:** 2026-10-18 — P9.3 Shard Ownership IMPLEMENTED (ADR 0057); formal CTO accept pending.
