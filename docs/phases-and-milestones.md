@@ -1273,36 +1273,46 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.3 implemented — CTO acceptance pending)
+### Phase status: 🔧 In progress (P9.4 Replication next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
 | P9.2 | Multi-worker execution | 🟢 ACCEPTED (`28f3d1f` / `79f3e89`) |
-| P9.3 | Shard ownership | 🔧 IMPLEMENTED (ADR 0057; formal accept pending) |
-| P9.4+ | Replication / consensus / failover | ⏳ |
+| P9.3 | Shard ownership | 🟢 ACCEPTED / CLOSED (`f514a63`) |
+| P9.4 | Replication | ⏭️ NEXT |
+| P9.4+ | Consensus / failover | ⏳ |
 
 ## P9.3 — Shard Ownership
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (in-process; CTO 🟢 pending) |
+| **Status** | 🟢 **ACCEPTED / CLOSED** (`f514a63`) |
 | **Code** | `trading/ownership.go`, `ownership_test.go`, worker fencing in `worker.go`, metrics |
-| **Docs** | [P9.3-SHARD-OWNERSHIP.md](./distributed/P9.3-SHARD-OWNERSHIP.md), [ADR 0057](./adr/0057-shard-ownership.md) |
+| **Docs** | [P9.3-SHARD-OWNERSHIP.md](./distributed/P9.3-SHARD-OWNERSHIP.md), [ADR 0057](./adr/0057-shard-ownership.md), [Q-bank](./interview/P9.3-SHARD-OWNERSHIP-QBANK.md) |
 
 ### Delivered
 
-1. `OwnerID`, `OwnershipToken`, `ShardOwnership`, states UNOWNED→OWNED→RELEASING  
-2. `OwnershipRegistry`: Acquire / Release / Validate; monotonic epoch  
+1. `OwnerID`, `OwnershipToken{Generation}`, `ShardOwnership`, states UNOWNED→OWNED→RELEASING  
+2. `OwnershipRegistry`: Acquire / Release / Validate; monotonic epoch + process generation  
 3. Bootstrap acquire-all-shards; shutdown release-all after drain  
-4. Fencing at enqueue + exec (before match/res/WAL)  
-5. Stale owner → zero financial mutation (cash + WAL seq unchanged)  
-6. Concurrent same-shard single winner; multi-shard parallel acquire  
+4. Fencing at enqueue + exec (before match/res/WAL); transition-race test  
+5. Stale owner → zero financial mutation on non-trivial state (orders/trades/book/res/cash/pos/BP/WAL)  
+6. Concurrent same-shard single winner; multi-shard parallel acquire; topology change  
 7. Metrics: acquire/release/fencing; fuzz + race green  
 
-### Carry-forward to P9.4+
+### Carry-forward to P9.4 (Replication)
 
-Exactly one authoritative owner per shard while OWNED; epoch fencing; control-plane ownership (not financial WAL); no multi-process/consensus yet.
+1. Exactly one authoritative execution owner per InstrumentID  
+2. InstrumentExecutor remains single-writer  
+3. Ownership epochs/generations must not be bypassed  
+4. Stale owners must never perform authoritative financial mutation  
+5. WAL remains SoT for financial history; durable-before-ack  
+6. Replication must not introduce duplicate financial executions  
+7. Replicas must not independently perform authoritative matching  
+8. P8.6 financial invariants remain mandatory  
+9. Ownership authority vs replication authority boundaries must be explicit  
+10. No silent failover/consensus/distributed ownership in P9.4
 
 ---
 
@@ -1443,4 +1453,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.3 Shard Ownership IMPLEMENTED (ADR 0057); formal CTO accept pending.
+**Last updated:** 2026-10-18 — P9.3 🟢 ACCEPTED/CLOSED (`f514a63`); P9.4 Replication next.
