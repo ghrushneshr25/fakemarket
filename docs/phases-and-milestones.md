@@ -1273,13 +1273,32 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: ⏳ Not started
+### Phase status: 🔧 In progress (P9.1 implemented — awaiting CTO)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
-| P9.1 | Instrument sharding | ⏭️ NEXT |
+| P9.1 | Instrument sharding | 🔧 IMPLEMENTED (CTO review) |
 | P9.2 | Shard ownership + failover | ⏳ |
 | P9.3 | Replication / split-brain protection | ⏳ |
+
+## P9.1 — Instrument Sharding
+
+| | |
+|--|--|
+| **Status** | 🔧 **IMPLEMENTED** (awaiting CTO) |
+| **Code** | `trading/shard.go`, `router.go`, `bootstrap.go`, `shard_test.go` |
+| **Docs** | [P9.1-INSTRUMENT-SHARDING.md](./distributed/P9.1-INSTRUMENT-SHARDING.md), [ADR 0055](./adr/0055-instrument-sharding.md) |
+
+### Delivered
+
+1. FNV-1a deterministic `InstrumentID → ShardID`  
+2. Topology / OwnerOracle / Route API  
+3. BootstrapSharded; shared WAL preserved  
+4. Concurrent same-instrument serialize; cross-shard overlap; same-shard isolation  
+5. Recovery mapping + changed shard-count reassignment  
+6. Route ~23ns/op; race tests  
+
+---
 
 ---
 
@@ -1369,4 +1388,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P8 🟢 COMPLETE (`8d577df`); P9.1 Instrument Sharding next.
+**Last updated:** 2026-10-18 — P9.1 Instrument Sharding implemented (CTO review).

@@ -22,6 +22,20 @@ type BootstrapResult struct {
 	Res      *domain.ReservationStore
 	Metrics  *metrics.Registry
 	Logger   *slog.Logger
+	Router   *Router
+	// NumShards is the configured shard count (default 1).
+	NumShards int
+}
+
+// BootstrapConfig optional knobs for BootstrapMultiCfg (P9.1).
+type BootstrapConfig struct {
+	WALDir      string
+	Accounts    map[domain.AccountID]*domain.Account
+	Probes      map[domain.InstrumentID]ConcurrencyProbe
+	Hooks       *WALHooks
+	Instruments []domain.Instrument
+	// NumShards is InstrumentID→ShardID modulus. 0 or 1 → single shard. Must be >= 1 if set via Cfg.
+	NumShards int
 }
 
 // WALHooks are optional production-nil injection points for chaos tests (P8.3/P8.4).
@@ -67,8 +81,32 @@ func BootstrapMultiHooks(
 	hooks *WALHooks,
 	instruments ...domain.Instrument,
 ) (*BootstrapResult, error) {
-	if len(instruments) == 0 {
+	return BootstrapCfg(BootstrapConfig{
+		WALDir: walDir, Accounts: accounts, Probes: probes, Hooks: hooks,
+		Instruments: instruments, NumShards: 1,
+	})
+}
+
+// BootstrapSharded is BootstrapMulti with explicit NumShards (P9.1).
+func BootstrapSharded(
+	walDir string,
+	numShards int,
+	accounts map[domain.AccountID]*domain.Account,
+	instruments ...domain.Instrument,
+) (*BootstrapResult, error) {
+	return BootstrapCfg(BootstrapConfig{
+		WALDir: walDir, Accounts: accounts, Instruments: instruments, NumShards: numShards,
+	})
+}
+
+// BootstrapCfg is the full bootstrap entry (WAL hooks + shards).
+func BootstrapCfg(cfg BootstrapConfig) (*BootstrapResult, error) {
+	if len(cfg.Instruments) == 0 {
 		return nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
+	}
+	nShards := cfg.NumShards
+	if nShards <= 0 {
+		nShards = 1
 	}
 	mreg := metrics.New()
 	// P7.6 O1 defaults; WAL_GROUP_COMMIT=off|0|1 → legacy one-sync-per-Append (A/B).
@@ -78,15 +116,15 @@ func BootstrapMultiHooks(
 		gcMax, gcWait = 1, 0
 	}
 	wcfg := wal.Config{
-		Dir: walDir, SyncOnAppend: true,
+		Dir: cfg.WALDir, SyncOnAppend: true,
 		// Concurrent Append callers may share one fsync; each still blocks until durable.
 		GroupCommitMax:  gcMax,
 		GroupCommitWait: gcWait,
 		OnAppend:        func(ok bool, n int, d time.Duration) { mreg.ObserveWAL(ok, n, d) },
 	}
-	if hooks != nil {
-		wcfg.OpenFile = hooks.OpenFile
-		wcfg.OnFault = hooks.OnFault
+	if cfg.Hooks != nil {
+		wcfg.OpenFile = cfg.Hooks.OpenFile
+		wcfg.OnFault = cfg.Hooks.OnFault
 	}
 	w, err := wal.Open(wcfg)
 	if err != nil {
@@ -96,13 +134,17 @@ func BootstrapMultiHooks(
 	var orderIDs atomic.Uint64
 	var orderSeq atomic.Uint64
 	var journalMu sync.Mutex
-	reg := NewAccountRegistry(accounts)
+	reg := NewAccountRegistry(cfg.Accounts)
 	resStore := domain.NewReservationStore()
 	log := slog.Default()
 	router := NewRouter()
+	if err := router.ConfigureShards(nShards); err != nil {
+		_ = w.Close()
+		return nil, err
+	}
 	svc := NewService(router).WithMetrics(mreg).WithLogger(log)
 	onFault := func() { svc.SetReady(false) }
-	for _, inst := range instruments {
+	for _, inst := range cfg.Instruments {
 		deps := ExecutorDeps{
 			Instrument:       inst,
 			Accounts:         reg,
@@ -117,8 +159,8 @@ func BootstrapMultiHooks(
 			Metrics:          mreg,
 			Logger:           log,
 		}
-		if probes != nil {
-			deps.Probe = probes[inst.ID]
+		if cfg.Probes != nil {
+			deps.Probe = cfg.Probes[inst.ID]
 		}
 		ex, err := NewInstrumentExecutor(deps)
 		if err != nil {
@@ -126,6 +168,19 @@ func BootstrapMultiHooks(
 			return nil, err
 		}
 		router.Register(ex)
+		if sid, ok := router.ShardOf(inst.ID); ok {
+			mreg.ObserveShardRegister(sid.String())
+			_ = sid
+		}
+	}
+	if topo := router.Topology(); topo != nil {
+		if err := topo.OwnerOracle(); err != nil {
+			_ = w.Close()
+			return nil, fmt.Errorf("shard ownership: %w", err)
+		}
+		for i, n := range topo.Distribution() {
+			mreg.SetShardInstruments(fmt.Sprintf("%d", i), n)
+		}
 	}
 	svc.SetReady(true)
 	rm := &ReadModel{
@@ -136,6 +191,7 @@ func BootstrapMultiHooks(
 	}
 	return &BootstrapResult{
 		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore, Metrics: mreg, Logger: log,
+		Router: router, NumShards: nShards,
 	}, nil
 }
 

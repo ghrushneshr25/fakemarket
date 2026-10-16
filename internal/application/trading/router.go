@@ -10,13 +10,19 @@ import (
 
 // Router routes commands to per-instrument single-writer executors.
 // It does not implement matching.
+//
+// P9.1: optional Topology assigns each instrument a deterministic ShardID.
+// Routing still resolves InstrumentID → InstrumentExecutor (1:1). Shards group
+// ownership for concurrency isolation metrics and future P9.2 ownership transfer.
+// Matching and WAL are unchanged.
 type Router struct {
 	mu       sync.RWMutex
 	byInst   map[domain.InstrumentID]*InstrumentExecutor
 	orderLoc map[domain.OrderID]domain.InstrumentID
+	topo     *Topology // nil until ConfigureShards / bootstrap
 }
 
-// NewRouter creates an empty router.
+// NewRouter creates an empty router (1 logical shard until ConfigureShards).
 func NewRouter() *Router {
 	return &Router{
 		byInst:   make(map[domain.InstrumentID]*InstrumentExecutor),
@@ -24,11 +30,84 @@ func NewRouter() *Router {
 	}
 }
 
-// Register adds an instrument execution context.
+// ConfigureShards installs topology with numShards. Must be called before Register
+// when using multi-shard bootstrap. numShards <= 0 is an error.
+func (r *Router) ConfigureShards(numShards int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.byInst) > 0 {
+		return fmt.Errorf("%w: configure shards before registering instruments", ErrInvalidCommand)
+	}
+	topo, err := NewTopology(numShards)
+	if err != nil {
+		return err
+	}
+	r.topo = topo
+	return nil
+}
+
+// Topology returns the shard topology (may be nil if not configured).
+func (r *Router) Topology() *Topology {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.topo
+}
+
+// NumShards returns configured shard count (1 if unconfigured).
+func (r *Router) NumShards() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.topo == nil {
+		return 1
+	}
+	return r.topo.NumShards
+}
+
+// ShardOf returns the owning ShardID for a registered instrument.
+func (r *Router) ShardOf(id domain.InstrumentID) (ShardID, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.topo != nil {
+		return r.topo.ShardOf(id)
+	}
+	if _, ok := r.byInst[id]; ok {
+		return 0, true
+	}
+	return 0, false
+}
+
+// Register adds an instrument execution context and assigns it to its deterministic shard.
 func (r *Router) Register(ex *InstrumentExecutor) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.byInst[ex.instrument.ID] = ex
+	if r.topo != nil {
+		_, _ = r.topo.Assign(ex)
+	}
+}
+
+// Route resolves InstrumentID → (ShardID, executor). Does not mutate domain state.
+func (r *Router) Route(instrumentID domain.InstrumentID) (ShardID, *InstrumentExecutor, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ex, ok := r.byInst[instrumentID]
+	if !ok || ex == nil {
+		return 0, nil, ErrInstrumentUnknown
+	}
+	sid := ShardID(0)
+	if r.topo != nil {
+		if s, ok := r.topo.owner[instrumentID]; ok {
+			sid = s
+		} else {
+			// Should not happen if Register assigned; recompute.
+			s, err := AssignShard(instrumentID, r.topo.NumShards)
+			if err != nil {
+				return 0, nil, err
+			}
+			sid = s
+		}
+	}
+	return sid, ex, nil
 }
 
 // Submit routes by InstrumentID.

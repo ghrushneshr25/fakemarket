@@ -66,6 +66,10 @@ type Registry struct {
 	QueryRequests *prometheus.CounterVec // operation
 	QueryErrors   prometheus.Counter
 	QueryDuration *prometheus.HistogramVec
+
+	// P9.1 shards (bounded label: shard_id as small integer string)
+	ShardInstruments *prometheus.GaugeVec   // shard=
+	ShardRegisters   *prometheus.CounterVec // shard=
 }
 
 // latencyBuckets are fixed µs–ms style buckets for exchange ops (seconds).
@@ -117,7 +121,32 @@ func New() *Registry {
 	m.QueryErrors = mustCounter(r, "fakemarket_query_errors_total", "Query API errors")
 	m.QueryDuration = mustHistVec(r, "fakemarket_query_duration_seconds", "Query latency", "operation", "result")
 
+	m.ShardInstruments = mustGaugeVec(r, "fakemarket_shard_instruments", "Instruments owned by shard (P9.1)", "shard")
+	m.ShardRegisters = mustCounterVec(r, "fakemarket_shard_instrument_registers_total", "Instrument registrations per shard", "shard")
+
 	return m
+}
+
+// ObserveShardRegister records one instrument assigned to a shard (bounded shard label).
+func (m *Registry) ObserveShardRegister(shard string) {
+	if m == nil {
+		return
+	}
+	m.ShardRegisters.WithLabelValues(shard).Inc()
+}
+
+// SetShardInstruments sets gauge of instruments on a shard.
+func (m *Registry) SetShardInstruments(shard string, n int) {
+	if m == nil {
+		return
+	}
+	m.ShardInstruments.WithLabelValues(shard).Set(float64(n))
+}
+
+func mustGaugeVec(r *prometheus.Registry, name, help string, labels ...string) *prometheus.GaugeVec {
+	g := prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: name, Help: help}, labels)
+	r.MustRegister(g)
+	return g
 }
 
 // Handler returns Prometheus HTTP exposition.
