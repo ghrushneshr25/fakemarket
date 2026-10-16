@@ -12,6 +12,9 @@ import (
 
 func TestMain(m *testing.M) {
 	if os.Getenv(chaos.WorkerEnv) == "1" {
+		if os.Getenv(chaos.TradingWorkerEnv) == "1" {
+			chaos.RunTradingWorkerChild() // never returns
+		}
 		if os.Getenv("FM_CHAOS_MULTI") == "1" {
 			chaos.RunMultiWorkerChild()
 		}

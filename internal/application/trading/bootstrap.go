@@ -118,6 +118,11 @@ func BootstrapCfg(cfg BootstrapConfig) (*BootstrapResult, error) {
 	if nShards <= 0 {
 		nShards = 1
 	}
+	// P9.2: NumWorkers < 0 invalid. NumWorkers == 0 → legacy direct path (no worker queues).
+	// NumWorkers >= 1 → multi-worker pool. Documented compatibility mode for 0.
+	if cfg.NumWorkers < 0 {
+		return nil, fmt.Errorf("%w: num_workers must be >= 0 (got %d)", ErrInvalidCommand, cfg.NumWorkers)
+	}
 	mreg := metrics.New()
 	// P7.6 O1 defaults; WAL_GROUP_COMMIT=off|0|1 → legacy one-sync-per-Append (A/B).
 	gcMax, gcWait := 32, 100*time.Microsecond
