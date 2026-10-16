@@ -1273,20 +1273,21 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.1 implemented — awaiting CTO)
+### Phase status: 🔧 In progress (P9.2 Multi-Worker next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
-| P9.1 | Instrument sharding | 🔧 IMPLEMENTED (CTO review) |
-| P9.2 | Shard ownership + failover | ⏳ |
-| P9.3 | Replication / split-brain protection | ⏳ |
+| P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
+| P9.2 | Multi-worker execution | ⏭️ NEXT |
+| P9.3 | Shard ownership + failover | ⏳ |
+| P9.4+ | Replication / consensus | ⏳ |
 
 ## P9.1 — Instrument Sharding
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (awaiting CTO) |
-| **Code** | `trading/shard.go`, `router.go`, `bootstrap.go`, `shard_test.go` |
+| **Status** | 🟢 **ACCEPTED** (`22ce296` / `208cd01`) |
+| **Code** | `trading/shard.go`, `router.go`, `bootstrap.go`, `shard_test.go`, `account_concurrency.go` |
 | **Docs** | [P9.1-INSTRUMENT-SHARDING.md](./distributed/P9.1-INSTRUMENT-SHARDING.md), [ADR 0055](./adr/0055-instrument-sharding.md) |
 
 ### Delivered
@@ -1295,8 +1296,14 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 2. Topology / OwnerOracle / Route API  
 3. BootstrapSharded; shared WAL preserved  
 4. Concurrent same-instrument serialize; cross-shard overlap; same-shard isolation  
-5. Recovery mapping + changed shard-count reassignment  
-6. Route ~23ns/op; race tests  
+5. Shared-account multi-shard safety (ReservationStore + AccountRegistry)  
+6. Process-global TradeIDs; reservation capacity race; financial equivalence  
+7. Recovery mapping + changed shard-count reassignment; graceful drain  
+8. Route ~22ns/op; race + fuzz tests  
+
+### Invariant for P9.2+
+
+Exactly one authoritative execution owner per InstrumentID at any point in time.
 
 ---
 
@@ -1388,4 +1395,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.1 Instrument Sharding implemented (CTO review).
+**Last updated:** 2026-10-18 — P9.1 🟢 ACCEPTED (`22ce296`); P9.2 Multi-Worker next.

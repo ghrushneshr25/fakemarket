@@ -1,6 +1,6 @@
 # ADR 0055 — Instrument Sharding (P9.1)
 
-**Status:** Proposed (implementation complete; awaiting CTO)  
+**Status:** Accepted  
 **Date:** 2026-10-18  
 **Phase:** P9  
 **Milestone:** P9.1
@@ -29,4 +29,6 @@ P8 closed single-process reliability. P9.1 introduces deterministic instrument o
 
 ## Status
 
-Implemented for CTO review.
+Accepted (CTO — P9.1 CLOSED, commits `208cd01` / `22ce296`).
+
+P9.2 must preserve: exactly one authoritative execution owner per InstrumentID.
