@@ -1,6 +1,6 @@
 # ADR 0056 — Multi-Worker Execution (P9.2)
 
-**Status:** Proposed (implementation complete; awaiting CTO)  
+**Status:** Accepted  
 **Date:** 2026-10-18  
 **Phase:** P9  
 **Milestone:** P9.2
@@ -24,4 +24,6 @@ Replication, failover, migration, consensus, remote workers, K8s.
 
 ## Status
 
-Implemented for CTO review.
+Accepted (CTO — P9.2 CLOSED, commits `79f3e89` / `64142e6` / `28f3d1f`).
+
+P9.3 must treat ownership as a first-class lifecycle concept without weakening the P9.1/P9.2 single-owner invariant.

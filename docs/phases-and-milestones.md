@@ -1273,30 +1273,36 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.2 implemented — awaiting CTO)
+### Phase status: 🔧 In progress (P9.3 Shard Ownership next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
-| P9.2 | Multi-worker execution | 🔧 IMPLEMENTED (CTO review) |
-| P9.3 | Shard ownership + failover | ⏳ |
-| P9.4+ | Replication / consensus | ⏳ |
+| P9.2 | Multi-worker execution | 🟢 ACCEPTED (`28f3d1f` / `79f3e89`) |
+| P9.3 | Shard ownership | ⏭️ NEXT |
+| P9.4+ | Replication / consensus / failover | ⏳ |
 
 ## P9.2 — Multi-Worker Execution
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (awaiting CTO) |
-| **Code** | `trading/worker.go`, `worker_test.go`, bootstrap/router wiring |
+| **Status** | 🟢 **ACCEPTED** (`28f3d1f` / `79f3e89` / `64142e6`) |
+| **Code** | `trading/worker.go`, `worker_test.go`, `worker_bench_test.go`, `chaos/p92_crash.go` |
 | **Docs** | [P9.2-MULTI-WORKER.md](./distributed/P9.2-MULTI-WORKER-EXECUTION.md), [ADR 0056](./adr/0056-multi-worker-execution.md) |
 
 ### Delivered
 
 1. WorkerPool: ShardID→WorkerID, per-instrument FIFO queues  
-2. OwnershipOracle; cross-worker concurrency; same-instrument serialize  
-3. Shared-account + reservation race across workers; P8.6 conservation  
+2. OwnershipOracle; cross-worker concurrency; same-worker isolation  
+3. Shared-account + reservation race; P8.6 conservation  
 4. Backpressure; graceful drain; TradeID uniqueness  
-5. Single vs multi-worker financial equivalence  
+5. Process-crash multi-worker recovery (real OS exit)  
+6. Benchmark 1/2/4/8 workers (WAL-bound, not linear)  
+7. Single vs multi-worker financial equivalence  
+
+### Carry-forward to P9.3
+
+Exactly one authoritative owner per InstrumentID; executor single-writer; WAL SoT; durable-before-ack; P8.6 invariants; no silent drops.
 
 ---
 
@@ -1413,4 +1419,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.2 Multi-Worker implemented (CTO review).
+**Last updated:** 2026-10-18 — P9.2 🟢 ACCEPTED (`28f3d1f`); P9.3 Shard Ownership next.
