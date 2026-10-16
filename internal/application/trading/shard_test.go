@@ -671,7 +671,7 @@ func TestP91_SharedAccount_MultiShard_Concurrent(t *testing.T) {
 
 func TestP91_SharedAccount_ReservationCapacityRace(t *testing.T) {
 	// Cash can fund only ONE of two concurrent 600-notional buys (price 100 * qty 6).
-	xID, yID := findCrossShardPair(t, 8)
+	xID, yID := findCrossShardPair(t, 4)
 	a1, _ := domain.NewAccount(domain.AccountParams{ID: "A1", Currency: domain.CurrencyINR, Cash: 600})
 	a2, _ := domain.NewAccount(domain.AccountParams{ID: "A2", Currency: domain.CurrencyINR, Cash: 1_000_000})
 	_ = a2.AddToPosition(xID, 100_000, 100)
@@ -892,6 +892,9 @@ func FuzzP91_AssignShard(f *testing.F) {
 
 func findCrossShardPair(t *testing.T, n int) (domain.InstrumentID, domain.InstrumentID) {
 	t.Helper()
+	if n <= 0 {
+		n = 8
+	}
 	cands := []domain.InstrumentID{"AAPL", "MSFT", "GOOG", "TSLA", "NVDA", "AMZN", "META", "NFLX", "INTC", "AMD"}
 	for i := 0; i < len(cands); i++ {
 		for j := i + 1; j < len(cands); j++ {

@@ -70,6 +70,11 @@ type Registry struct {
 	// P9.1 shards (bounded label: shard_id as small integer string)
 	ShardInstruments *prometheus.GaugeVec   // shard=
 	ShardRegisters   *prometheus.CounterVec // shard=
+
+	// P9.2 workers (bounded label: worker_id)
+	WorkerEnqueues     *prometheus.CounterVec // worker=
+	WorkerQueueRejects *prometheus.CounterVec // worker=
+	WorkerDrainSeconds *prometheus.HistogramVec
 }
 
 // latencyBuckets are fixed µs–ms style buckets for exchange ops (seconds).
@@ -124,7 +129,35 @@ func New() *Registry {
 	m.ShardInstruments = mustGaugeVec(r, "fakemarket_shard_instruments", "Instruments owned by shard (P9.1)", "shard")
 	m.ShardRegisters = mustCounterVec(r, "fakemarket_shard_instrument_registers_total", "Instrument registrations per shard", "shard")
 
+	m.WorkerEnqueues = mustCounterVec(r, "fakemarket_worker_enqueues_total", "Commands enqueued to worker (P9.2)", "worker")
+	m.WorkerQueueRejects = mustCounterVec(r, "fakemarket_worker_queue_rejections_total", "Worker queue full rejections", "worker")
+	m.WorkerDrainSeconds = mustHistVec(r, "fakemarket_worker_drain_duration_seconds", "Worker drain duration on shutdown", "worker")
+
 	return m
+}
+
+// ObserveWorkerEnqueue records a successful enqueue.
+func (m *Registry) ObserveWorkerEnqueue(worker string) {
+	if m == nil {
+		return
+	}
+	m.WorkerEnqueues.WithLabelValues(worker).Inc()
+}
+
+// ObserveWorkerQueueReject records backpressure rejection.
+func (m *Registry) ObserveWorkerQueueReject(worker string) {
+	if m == nil {
+		return
+	}
+	m.WorkerQueueRejects.WithLabelValues(worker).Inc()
+}
+
+// ObserveWorkerDrain records drain duration.
+func (m *Registry) ObserveWorkerDrain(worker string, d time.Duration) {
+	if m == nil {
+		return
+	}
+	m.WorkerDrainSeconds.WithLabelValues(worker).Observe(d.Seconds())
 }
 
 // ObserveShardRegister records one instrument assigned to a shard (bounded shard label).

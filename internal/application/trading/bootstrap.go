@@ -26,17 +26,26 @@ type BootstrapResult struct {
 	Router   *Router
 	// NumShards is the configured shard count (default 1).
 	NumShards int
+	// NumWorkers is the worker pool size (0 = direct path).
+	NumWorkers int
+	// Pool is the multi-worker pool when NumWorkers >= 1.
+	Pool *WorkerPool
 }
 
-// BootstrapConfig optional knobs for BootstrapMultiCfg (P9.1).
+// BootstrapConfig optional knobs for BootstrapMultiCfg (P9.1 / P9.2).
 type BootstrapConfig struct {
 	WALDir      string
 	Accounts    map[domain.AccountID]*domain.Account
 	Probes      map[domain.InstrumentID]ConcurrencyProbe
 	Hooks       *WALHooks
 	Instruments []domain.Instrument
-	// NumShards is InstrumentID→ShardID modulus. 0 or 1 → single shard. Must be >= 1 if set via Cfg.
+	// NumShards is InstrumentID→ShardID modulus. 0 or 1 → single shard.
 	NumShards int
+	// NumWorkers is ShardID→WorkerID modulus (P9.2). 0 → direct executor path (no worker queues).
+	// 1+ attaches WorkerPool with per-instrument FIFO queues.
+	NumWorkers int
+	// WorkerQueueCap is per-instrument queue depth (default DefaultWorkerQueueCap).
+	WorkerQueueCap int
 }
 
 // WALHooks are optional production-nil injection points for chaos tests (P8.3/P8.4).
@@ -188,6 +197,28 @@ func BootstrapCfg(cfg BootstrapConfig) (*BootstrapResult, error) {
 			mreg.SetShardInstruments(fmt.Sprintf("%d", i), n)
 		}
 	}
+	var pool *WorkerPool
+	nWorkers := cfg.NumWorkers
+	if nWorkers > 0 {
+		var err error
+		pool, err = NewWorkerPool(router, WorkerPoolConfig{
+			NumWorkers: nWorkers, QueueCap: cfg.WorkerQueueCap,
+		}, mreg)
+		if err != nil {
+			_ = w.Close()
+			return nil, err
+		}
+		if err := pool.Attach(); err != nil {
+			_ = w.Close()
+			return nil, err
+		}
+		if err := pool.OwnershipOracle(); err != nil {
+			_ = w.Close()
+			return nil, err
+		}
+		pool.Start()
+		router.SetWorkerPool(pool)
+	}
 	svc.SetReady(true)
 	rm := &ReadModel{
 		Accounts: reg,
@@ -197,8 +228,38 @@ func BootstrapCfg(cfg BootstrapConfig) (*BootstrapResult, error) {
 	}
 	return &BootstrapResult{
 		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore, Metrics: mreg, Logger: log,
-		Router: router, NumShards: nShards,
+		Router: router, NumShards: nShards, NumWorkers: nWorkers, Pool: pool,
 	}, nil
+}
+
+// Shutdown stops admission, drains workers, closes WAL (P9.2).
+func (b *BootstrapResult) Shutdown() error {
+	if b == nil {
+		return nil
+	}
+	if b.Service != nil {
+		b.Service.SetReady(false)
+	}
+	if b.Pool != nil {
+		b.Pool.Stop()
+	}
+	if b.WAL != nil && !b.WAL.Faulted() {
+		return b.WAL.Close()
+	}
+	return nil
+}
+
+// BootstrapWorkers is BootstrapSharded with a worker pool (P9.2).
+func BootstrapWorkers(
+	walDir string,
+	numShards, numWorkers int,
+	accounts map[domain.AccountID]*domain.Account,
+	instruments ...domain.Instrument,
+) (*BootstrapResult, error) {
+	return BootstrapCfg(BootstrapConfig{
+		WALDir: walDir, Accounts: accounts, Instruments: instruments,
+		NumShards: numShards, NumWorkers: numWorkers,
+	})
 }
 
 // MustInstrument builds a simple INR instrument for tests.

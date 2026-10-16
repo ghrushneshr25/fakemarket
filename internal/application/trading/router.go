@@ -12,14 +12,14 @@ import (
 // It does not implement matching.
 //
 // P9.1: optional Topology assigns each instrument a deterministic ShardID.
-// Routing still resolves InstrumentID → InstrumentExecutor (1:1). Shards group
-// ownership for concurrency isolation metrics and future P9.2 ownership transfer.
+// P9.2: optional WorkerPool hosts per-instrument FIFO queues on workers.
 // Matching and WAL are unchanged.
 type Router struct {
 	mu       sync.RWMutex
 	byInst   map[domain.InstrumentID]*InstrumentExecutor
 	orderLoc map[domain.OrderID]domain.InstrumentID
-	topo     *Topology // nil until ConfigureShards / bootstrap
+	topo     *Topology   // nil until ConfigureShards / bootstrap
+	pool     *WorkerPool // nil → direct executor call (P9.1 path)
 }
 
 // NewRouter creates an empty router (1 logical shard until ConfigureShards).
@@ -110,15 +110,38 @@ func (r *Router) Route(instrumentID domain.InstrumentID) (ShardID, *InstrumentEx
 	return sid, ex, nil
 }
 
-// Submit routes by InstrumentID.
+// SetWorkerPool attaches multi-worker dispatch (P9.2). Nil clears (direct path).
+func (r *Router) SetWorkerPool(p *WorkerPool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pool = p
+}
+
+// WorkerPool returns the attached pool (may be nil).
+func (r *Router) WorkerPool() *WorkerPool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.pool
+}
+
+// Submit routes by InstrumentID (via worker pool when configured).
 func (r *Router) Submit(ctx context.Context, cmd SubmitOrderCommand) (SubmitOrderResult, error) {
 	r.mu.RLock()
+	pool := r.pool
 	ex, ok := r.byInst[cmd.InstrumentID]
 	r.mu.RUnlock()
 	if !ok {
 		return SubmitOrderResult{}, ErrInstrumentUnknown
 	}
-	res, err := ex.Submit(ctx, cmd)
+	var (
+		res SubmitOrderResult
+		err error
+	)
+	if pool != nil {
+		res, err = pool.Submit(ctx, cmd)
+	} else {
+		res, err = ex.Submit(ctx, cmd)
+	}
 	if err != nil {
 		return res, err
 	}
@@ -192,13 +215,20 @@ func (r *Router) listTradeSnapshots(accountID domain.AccountID, instrumentID dom
 // Cancel routes by looking up the order's instrument.
 func (r *Router) Cancel(ctx context.Context, cmd CancelOrderCommand) (CancelOrderResult, error) {
 	r.mu.RLock()
+	pool := r.pool
 	iid, ok := r.orderLoc[cmd.OrderID]
 	if !ok {
 		// try all executors
 		for id, ex := range r.byInst {
 			r.mu.RUnlock()
 			if _, found := ex.engine.GetOrder(cmd.OrderID); found {
-				res, err := ex.Cancel(ctx, cmd)
+				var res CancelOrderResult
+				var err error
+				if pool != nil {
+					res, err = pool.Cancel(ctx, cmd, id)
+				} else {
+					res, err = ex.Cancel(ctx, cmd)
+				}
 				if err == nil {
 					r.mu.Lock()
 					r.orderLoc[cmd.OrderID] = id
@@ -207,6 +237,7 @@ func (r *Router) Cancel(ctx context.Context, cmd CancelOrderCommand) (CancelOrde
 				return res, err
 			}
 			r.mu.RLock()
+			pool = r.pool
 		}
 		r.mu.RUnlock()
 		return CancelOrderResult{}, ErrOrderNotFound
@@ -215,6 +246,9 @@ func (r *Router) Cancel(ctx context.Context, cmd CancelOrderCommand) (CancelOrde
 	r.mu.RUnlock()
 	if ex == nil {
 		return CancelOrderResult{}, fmt.Errorf("%w: missing executor", ErrEngineUnavailable)
+	}
+	if pool != nil {
+		return pool.Cancel(ctx, cmd, iid)
 	}
 	return ex.Cancel(ctx, cmd)
 }

@@ -1273,14 +1273,32 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.2 Multi-Worker next)
+### Phase status: 🔧 In progress (P9.2 implemented — awaiting CTO)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
-| P9.2 | Multi-worker execution | ⏭️ NEXT |
+| P9.2 | Multi-worker execution | 🔧 IMPLEMENTED (CTO review) |
 | P9.3 | Shard ownership + failover | ⏳ |
 | P9.4+ | Replication / consensus | ⏳ |
+
+## P9.2 — Multi-Worker Execution
+
+| | |
+|--|--|
+| **Status** | 🔧 **IMPLEMENTED** (awaiting CTO) |
+| **Code** | `trading/worker.go`, `worker_test.go`, bootstrap/router wiring |
+| **Docs** | [P9.2-MULTI-WORKER.md](./distributed/P9.2-MULTI-WORKER-EXECUTION.md), [ADR 0056](./adr/0056-multi-worker-execution.md) |
+
+### Delivered
+
+1. WorkerPool: ShardID→WorkerID, per-instrument FIFO queues  
+2. OwnershipOracle; cross-worker concurrency; same-instrument serialize  
+3. Shared-account + reservation race across workers; P8.6 conservation  
+4. Backpressure; graceful drain; TradeID uniqueness  
+5. Single vs multi-worker financial equivalence  
+
+---
 
 ## P9.1 — Instrument Sharding
 
@@ -1395,4 +1413,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.1 🟢 ACCEPTED (`22ce296`); P9.2 Multi-Worker next.
+**Last updated:** 2026-10-18 — P9.2 Multi-Worker implemented (CTO review).
