@@ -98,16 +98,13 @@ func runWorkerBench(b *testing.B, numWorkers int, hot, sharedAcct bool) {
 				}
 			}
 			start := time.Now()
-			_, err := boot.Service.Submit(context.Background(), trading.SubmitOrderCommand{
+			_, _ = boot.Service.Submit(context.Background(), trading.SubmitOrderCommand{
 				AccountID: acct, InstrumentID: inst, Side: domain.SideBuy,
 				Type: domain.OrderTypeLimit, Price: &px, Quantity: 1,
 			})
 			d := time.Since(start).Nanoseconds()
 			latSum.Add(d)
 			latN.Add(1)
-			if err != nil {
-				// capacity / backpressure under extreme parallel — count as completed attempt
-			}
 			i++
 		}
 	})

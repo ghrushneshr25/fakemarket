@@ -161,7 +161,7 @@ func RunTradingMultiWorkerCrash(t *testing.T, walDir string, spec TradingWorkerS
 		"FM_CHAOS_SPEC="+specPath,
 	)
 	cmd.Dir = filepath.Dir(exe)
-	err = cmd.Run()
+	_ = cmd.Run()
 	code := ExitUnexpected
 	if cmd.ProcessState != nil {
 		code = cmd.ProcessState.ExitCode()
