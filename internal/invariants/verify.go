@@ -361,11 +361,14 @@ func verifyReservationsCanonical(r *Report, c recovery.Canonical) {
 		if _, ok := orderAcct[res.OrderID]; !ok {
 			r.add(Violation{Name: "reservation.order_exists", Entity: res.OrderID})
 		}
-		// Terminal orders should not hold reservations.
+		// Terminal orders must not hold capacity (cash/pos). Zero-value residual
+		// entries (e.g. SELL marker with cash=0,pos=0) are allowed as no-op stubs.
 		for _, o := range c.Orders {
 			if o.ID == res.OrderID && domain.OrderStatus(o.Status).IsTerminal() {
-				r.add(Violation{Name: "reservation.no_terminal_order", Entity: res.OrderID,
-					Context: o.Status})
+				if res.Cash > 0 || res.PositionQuantity > 0 {
+					r.add(Violation{Name: "reservation.no_terminal_capacity", Entity: res.OrderID,
+						Context: fmt.Sprintf("status=%s cash=%d pos=%d", o.Status, res.Cash, res.PositionQuantity)})
+				}
 			}
 		}
 	}

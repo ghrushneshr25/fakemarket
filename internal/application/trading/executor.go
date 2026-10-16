@@ -91,6 +91,10 @@ type ExecutorDeps struct {
 	OrderIDs *atomic.Uint64
 	OrderSeq *atomic.Uint64
 	Clock    func() time.Time
+	// TradeIDs / TradeSeq are optional process-global match ID sources (P9.1).
+	// Shared across instruments so TradeID is unique in the WAL (seenTradeIDs).
+	TradeIDs matching.IDSource
+	TradeSeq matching.SeqSource
 	// OnDurableFailure is called if WAL append fails after state mutation (match/reserve).
 	OnDurableFailure func()
 	Probe            ConcurrencyProbe
@@ -100,7 +104,11 @@ type ExecutorDeps struct {
 
 // NewInstrumentExecutor constructs a single-instrument execution context.
 func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
-	eng, err := matching.NewEngine(d.Instrument.ID)
+	eng, err := matching.NewEngineWith(matching.EngineOpts{
+		Instrument: d.Instrument.ID,
+		IDs:        d.TradeIDs,
+		Seq:        d.TradeSeq,
+	})
 	if err != nil {
 		return nil, err
 	}

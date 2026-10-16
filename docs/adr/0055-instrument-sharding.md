@@ -25,7 +25,7 @@ P8 closed single-process reliability. P9.1 introduces deterministic instrument o
 - Cross-instrument concurrency unchanged (per-executor mutex).
 - Same-instrument serialization unchanged.
 - Shard count change on restart reassigns via same hash; recovery still one owner per instrument.
-- Account concurrency model unchanged (P6: concurrent multi-instrument same-account mutation still limited).
+- Shared-account multi-shard safety: `ReservationStore` + `AccountRegistry.WithWrite` (documented in `account_concurrency.go`); process-global trade IDs.
 
 ## Status
 

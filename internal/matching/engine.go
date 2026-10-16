@@ -17,32 +17,53 @@ type Engine struct {
 	instrument domain.InstrumentID
 	book       *book.OrderBook
 	orders     map[domain.OrderID]*domain.Order
-	ids        *CounterIDs
-	seq        *CounterSeq
+	ids        IDSource
+	seq        SeqSource
 	clock      *MutableClock
 	gen        *TradeGenerator
 	trades     []GeneratedTrade
 	outcomes   []CommandOutcome
 }
 
-// NewEngine creates a fresh empty engine for instrument.
+// EngineOpts configures NewEngineWith (P9.1 shared trade IDs across instruments).
+type EngineOpts struct {
+	Instrument domain.InstrumentID
+	// IDs allocates Trade/Execution IDs; nil → process-local CounterIDs.
+	// Share one CounterIDs across engines for multi-instrument WAL uniqueness.
+	IDs IDSource
+	// Seq allocates trade sequences; nil → local CounterSeq.
+	Seq SeqSource
+}
+
+// NewEngine creates a fresh empty engine for instrument (private ID counters).
 func NewEngine(instrument domain.InstrumentID) (*Engine, error) {
-	if instrument == "" {
+	return NewEngineWith(EngineOpts{Instrument: instrument})
+}
+
+// NewEngineWith creates an engine, optionally sharing ID/seq sources process-wide.
+func NewEngineWith(opts EngineOpts) (*Engine, error) {
+	if opts.Instrument == "" {
 		return nil, fmt.Errorf("%w: empty instrument", ErrInvalidReplay)
 	}
-	ob, err := book.NewOrderBook(instrument)
+	ob, err := book.NewOrderBook(opts.Instrument)
 	if err != nil {
 		return nil, err
 	}
-	ids := NewCounterIDs()
-	seq := NewCounterSeq()
+	ids := opts.IDs
+	if ids == nil {
+		ids = NewCounterIDs()
+	}
+	seq := opts.Seq
+	if seq == nil {
+		seq = NewCounterSeq()
+	}
 	clock := NewMutableClock(time.Unix(0, 0).UTC())
 	gen, err := NewTradeGenerator(ids, seq, clock)
 	if err != nil {
 		return nil, err
 	}
 	return &Engine{
-		instrument: instrument,
+		instrument: opts.Instrument,
 		book:       ob,
 		orders:     make(map[domain.OrderID]*domain.Order),
 		ids:        ids,

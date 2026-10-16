@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
+	"github.com/ghrushneshr25/fakemarket/internal/matching"
 	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
@@ -134,6 +135,9 @@ func BootstrapCfg(cfg BootstrapConfig) (*BootstrapResult, error) {
 	var orderIDs atomic.Uint64
 	var orderSeq atomic.Uint64
 	var journalMu sync.Mutex
+	// Process-global trade/execution IDs (P9.1): unique across instruments for WAL recovery.
+	tradeIDs := matching.NewCounterIDs()
+	tradeSeq := matching.NewCounterSeq()
 	reg := NewAccountRegistry(cfg.Accounts)
 	resStore := domain.NewReservationStore()
 	log := slog.Default()
@@ -154,6 +158,8 @@ func BootstrapCfg(cfg BootstrapConfig) (*BootstrapResult, error) {
 			Res:              resStore,
 			OrderIDs:         &orderIDs,
 			OrderSeq:         &orderSeq,
+			TradeIDs:         tradeIDs,
+			TradeSeq:         tradeSeq,
 			Clock:            func() time.Time { return time.Now().UTC() },
 			OnDurableFailure: onFault,
 			Metrics:          mreg,

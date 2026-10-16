@@ -2,6 +2,7 @@ package matching
 
 import (
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
@@ -34,34 +35,33 @@ type SeqSource interface {
 }
 
 // CounterIDs is a deterministic ID allocator: TRD-1, TRD-2, … / EXE-1, EXE-2, …
+// Safe for concurrent use (P9.1 multi-instrument / multi-shard trade generation).
 type CounterIDs struct {
-	trade int64
-	exec  int64
+	trade atomic.Int64
+	exec  atomic.Int64
 }
 
 func NewCounterIDs() *CounterIDs { return &CounterIDs{} }
 
 func (c *CounterIDs) NextTradeID() domain.TradeID {
-	c.trade++
-	return domain.TradeID("TRD-" + strconv.FormatInt(c.trade, 10))
+	n := c.trade.Add(1)
+	return domain.TradeID("TRD-" + strconv.FormatInt(n, 10))
 }
 
 func (c *CounterIDs) NextExecutionID() domain.ExecutionID {
-	c.exec++
-	return domain.ExecutionID("EXE-" + strconv.FormatInt(c.exec, 10))
+	n := c.exec.Add(1)
+	return domain.ExecutionID("EXE-" + strconv.FormatInt(n, 10))
 }
 
-// CounterSeq allocates Sequence 1, 2, 3, …
-type CounterSeq struct{ n domain.Sequence }
+// CounterSeq allocates Sequence 1, 2, 3, … (concurrent-safe).
+type CounterSeq struct{ n atomic.Uint64 }
 
 func NewCounterSeq() *CounterSeq { return &CounterSeq{} }
 
 func (s *CounterSeq) Next() domain.Sequence {
-	s.n++
-	if s.n == 0 {
-		// overflow wrap would be invalid; panic is not allowed for business —
-		// return max and let validation fail if somehow zero.
-		s.n = 1
+	n := s.n.Add(1)
+	if n == 0 {
+		return 1
 	}
-	return s.n
+	return domain.Sequence(n)
 }
