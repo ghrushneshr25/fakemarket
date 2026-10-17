@@ -1273,35 +1273,45 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.4 Replication implemented — CTO acceptance pending)
+### Phase status: 🔧 In progress (P9.5 Failover next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
 | P9.2 | Multi-worker execution | 🟢 ACCEPTED (`28f3d1f` / `79f3e89`) |
 | P9.3 | Shard ownership | 🟢 ACCEPTED / CLOSED (`f514a63`) |
-| P9.4 | Replication | 🔧 IMPLEMENTED (ADR 0058; formal accept pending) |
-| P9.5+ | Failover / consensus | ⏳ |
+| P9.4 | Replication | 🟢 ACCEPTED / CLOSED (`03baa31` / `51dbc31`) |
+| P9.5 | Failover | ⏭️ NEXT |
+| P9.6+ | Consensus / split-brain | ⏳ |
 
 ## P9.4 — Replication
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (WAL shipping; CTO 🟢 pending) |
-| **Code** | `internal/replication/` (role, replica, hub, primary) |
+| **Status** | 🟢 **ACCEPTED / CLOSED** (`03baa31`) |
+| **Code** | `internal/replication/` (role, replica, hub, ack, financial) |
 | **Docs** | [P9.4-REPLICATION.md](./distributed/P9.4-REPLICATION.md), [ADR 0058](./adr/0058-replication.md), [Q-bank](./interview/P9.4-REPLICATION-QBANK.md) |
 
 ### Delivered
 
-1. Explicit PRIMARY/REPLICA roles; replica cannot execute/match/append  
-2. WAL shipping via Hub; Receive → durable → ApplyEvent  
-3. Positions: received / durable / applied; lag = tip − applied  
-4. Strict sequence; gap/regression → FAILED; duplicates no-op  
-5. Catch-up, restart from local replica WAL, multi-replica equivalence  
-6. Canonical fingerprint vs primary RecoverDir; P8.6 on replica  
-7. Metrics (bounded replica_id); fuzz/race/bench; no auto-promote  
+1. Explicit PRIMARY/REPLICA; replica cannot execute/match/append/promote  
+2. WAL shipping; isolated trial ApplyEvent commit (atomicity)  
+3. ReplicaAck{Received,Durable,Applied}; Durable≠Applied restart path  
+4. CURRENT relative to observed primary tip  
+5. FinancialView: cash/reserved/available/BP/positions/reservations  
+6. Catch-up, multi-replica isolation, fingerprint + P8.6  
+7. R1–R14 acceptance invariants closed  
 
-### Non-goals preserved
+### Carry-forward to P9.5 (Failover)
+
+1. Primary remains sole financial authority until explicit promotion  
+2. Replica never auto-promotes (P9.4)  
+3. P9.5 must fence old primary before/as new primary accepts commands  
+4. Exactly one promoted authority; no dual writers  
+5. Replication prefix correctness + apply atomicity remain mandatory  
+6. Split-brain/consensus formal layer deferred to P9.6 unless P9.5 requires minimal fencing  
+
+### Non-goals preserved (P9.4)
 
 No failover, consensus, Raft, quorum, distributed ownership, or automatic promotion.
 
@@ -1475,4 +1485,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.4 Replication IMPLEMENTED (ADR 0058); formal CTO accept pending.
+**Last updated:** 2026-10-18 — P9.4 🟢 ACCEPTED/CLOSED (`03baa31`); P9.5 Failover next.

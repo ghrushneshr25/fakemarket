@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (implementation complete; formal CTO acceptance pending)
+Accepted — P9.4 CLOSED (`03baa31`)
 
 ## Context
 
