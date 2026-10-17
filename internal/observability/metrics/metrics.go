@@ -89,6 +89,11 @@ type Registry struct {
 	ReplicationDuplicatesTotal *prometheus.CounterVec // replica
 	ReplicationLagEvents       *prometheus.GaugeVec   // replica
 	ReplicationAppliedSeq      *prometheus.GaugeVec   // replica
+
+	// P9.5 failover (bounded reason/result)
+	FailoverAttemptsTotal   *prometheus.CounterVec // result=
+	FailoverFenceTotal      *prometheus.CounterVec // reason=
+	FailoverDurationSeconds prometheus.Histogram
 }
 
 // latencyBuckets are fixed µs–ms style buckets for exchange ops (seconds).
@@ -159,7 +164,36 @@ func New() *Registry {
 	m.ReplicationLagEvents = mustGaugeVec(r, "fakemarket_replication_lag_events", "Primary tip minus replica applied sequence", "replica")
 	m.ReplicationAppliedSeq = mustGaugeVec(r, "fakemarket_replication_last_applied_sequence", "Replica last applied Event.Sequence", "replica")
 
+	m.FailoverAttemptsTotal = mustCounterVec(r, "fakemarket_failover_attempts_total", "Failover/promotion attempts (P9.5)", "result")
+	m.FailoverFenceTotal = mustCounterVec(r, "fakemarket_failover_fence_total", "Authority fencing events", "reason")
+	m.FailoverDurationSeconds = mustHist(r, "fakemarket_failover_duration_seconds", "Promotion duration")
+
 	return m
+}
+
+// ObserveFailover records a failover attempt outcome.
+func (m *Registry) ObserveFailover(op string, ok bool) {
+	if m == nil {
+		return
+	}
+	_ = op
+	m.FailoverAttemptsTotal.WithLabelValues(resultOK(ok)).Inc()
+}
+
+// ObserveFailoverFence records fence reason.
+func (m *Registry) ObserveFailoverFence(reason string) {
+	if m == nil {
+		return
+	}
+	m.FailoverFenceTotal.WithLabelValues(reason).Inc()
+}
+
+// ObserveFailoverDuration records promotion duration.
+func (m *Registry) ObserveFailoverDuration(d time.Duration) {
+	if m == nil {
+		return
+	}
+	m.FailoverDurationSeconds.Observe(d.Seconds())
 }
 
 func resultOK(ok bool) string {
