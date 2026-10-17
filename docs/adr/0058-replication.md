@@ -21,11 +21,13 @@ without creating a second matching or settlement authority.
    settle, or allocate `Event.Sequence` / `TradeID`.
 3. **Apply path:** `recovery.State.ApplyEvent` only — never re-Submit or re-match.
 4. **Positions:** Distinct `LastReceived`, `LastDurable`, `LastApplied`.
-5. **ACK:** `Receive` returns success only after APPLIED (and DURABLE when local WAL set).
-6. **Ordering:** Strict contiguous sequence; gaps/regression → FAILED (fail-closed).
-7. **Duplicates:** `seq <= LastApplied` → no-op (no double financial apply).
-8. **Catch-up:** Stream primary WAL from `applied+1`; restartable via local replica WAL.
-9. **Fingerprint:** `recovery.Canonical` / `CompareCanonical` for primary↔replica equivalence.
+5. **ACK:** `Receive` returns `ReplicaAck{Received,Durable,Applied}` with invariants Durable≤Received, Applied≤Durable. Success ⇒ durable+applied.
+6. **Apply atomicity:** Isolated trial fold (rebuild applied prefix + new event); commit only on success. Failed apply leaves prior live state intact.
+7. **Ordering:** Strict contiguous sequence; gaps/regression → FAILED (fail-closed).
+8. **Duplicates:** `seq <= LastApplied` → no-op (no double financial apply).
+9. **CURRENT:** Relative to `observedPrimaryTip`; tip advance → LAGGING.
+10. **Catch-up:** Stream primary WAL from `applied+1`; restartable via local replica WAL; durable-ahead re-apply supported.
+11. **Fingerprint:** `recovery.Canonical` + explicit `FinancialView` (cash/reserved/available/BP/positions/reservations).
 10. **Hub:** `Primary → Replica A`, `Primary → Replica B` (no replica-to-replica).
 11. **Primary command path:** Durable-before-ack unchanged; shipping is downstream of
     primary durability (async relative to client ack).

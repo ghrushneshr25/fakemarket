@@ -76,7 +76,7 @@ func (h *Hub) ObserveDurable(ev event.Event) {
 
 	for _, r := range reps {
 		r.SetPrimaryTip(seq)
-		if err := r.Receive(ev); err != nil {
+		if _, err := r.Receive(ev); err != nil {
 			if h.m != nil {
 				h.m.ObserveReplicationError(string(r.ID()), "ship")
 			}

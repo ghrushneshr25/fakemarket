@@ -221,7 +221,7 @@ func TestP94_SequenceGap_FailsClosed(t *testing.T) {
 	if n < 2 {
 		t.Fatal("need >=2 events")
 	}
-	err = r.Receive(second) // skip seq 1 → gap
+	_, err = r.Receive(second) // skip seq 1 → gap
 	if err == nil {
 		t.Fatal("gap must fail")
 	}
@@ -252,7 +252,7 @@ func TestP94_StrictOrder_OK(t *testing.T) {
 		if prev > 0 && seq != prev+1 {
 			t.Fatalf("primary not ordered %d→%d", prev, seq)
 		}
-		if err := r.Receive(ev); err != nil {
+		if _, err := r.Receive(ev); err != nil {
 			t.Fatal(err)
 		}
 		prev = seq
@@ -283,7 +283,7 @@ func TestP94_DuplicateDelivery_NoDoubleApply(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := r.Receive(ev); err != nil {
+		if _, err := r.Receive(ev); err != nil {
 			t.Fatal("dup must be soft-ok", err)
 		}
 	}
