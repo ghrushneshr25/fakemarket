@@ -80,6 +80,15 @@ type Registry struct {
 	OwnershipAcquireTotal *prometheus.CounterVec // owner, shard, result=
 	OwnershipReleaseTotal *prometheus.CounterVec // owner, shard
 	OwnershipFenceTotal   *prometheus.CounterVec // reason=
+
+	// P9.4 replication (bounded replica_id)
+	ReplicationReceivedTotal   *prometheus.CounterVec // replica, result
+	ReplicationAppliedTotal    *prometheus.CounterVec // replica, result
+	ReplicationShipTotal       *prometheus.CounterVec // replica, result
+	ReplicationErrorsTotal     *prometheus.CounterVec // replica, reason
+	ReplicationDuplicatesTotal *prometheus.CounterVec // replica
+	ReplicationLagEvents       *prometheus.GaugeVec   // replica
+	ReplicationAppliedSeq      *prometheus.GaugeVec   // replica
 }
 
 // latencyBuckets are fixed µs–ms style buckets for exchange ops (seconds).
@@ -142,7 +151,78 @@ func New() *Registry {
 	m.OwnershipReleaseTotal = mustCounterVec(r, "fakemarket_ownership_release_total", "Shard ownership releases", "owner", "shard")
 	m.OwnershipFenceTotal = mustCounterVec(r, "fakemarket_ownership_fencing_rejections_total", "Stale/not-owner fencing rejections", "reason")
 
+	m.ReplicationReceivedTotal = mustCounterVec(r, "fakemarket_replication_records_received_total", "Replication records received (P9.4)", "replica", "result")
+	m.ReplicationAppliedTotal = mustCounterVec(r, "fakemarket_replication_records_applied_total", "Replication records applied", "replica", "result")
+	m.ReplicationShipTotal = mustCounterVec(r, "fakemarket_replication_records_shipped_total", "Records shipped from primary hub", "replica", "result")
+	m.ReplicationErrorsTotal = mustCounterVec(r, "fakemarket_replication_errors_total", "Replication errors", "replica", "reason")
+	m.ReplicationDuplicatesTotal = mustCounterVec(r, "fakemarket_replication_duplicates_total", "Duplicate delivery (no re-apply)", "replica")
+	m.ReplicationLagEvents = mustGaugeVec(r, "fakemarket_replication_lag_events", "Primary tip minus replica applied sequence", "replica")
+	m.ReplicationAppliedSeq = mustGaugeVec(r, "fakemarket_replication_last_applied_sequence", "Replica last applied Event.Sequence", "replica")
+
 	return m
+}
+
+func resultOK(ok bool) string {
+	if ok {
+		return "ok"
+	}
+	return "error"
+}
+
+// ObserveReplicationReceived records receive attempt.
+func (m *Registry) ObserveReplicationReceived(replica string, ok bool) {
+	if m == nil {
+		return
+	}
+	m.ReplicationReceivedTotal.WithLabelValues(replica, resultOK(ok)).Inc()
+}
+
+// ObserveReplicationApplied records apply.
+func (m *Registry) ObserveReplicationApplied(replica string, ok bool) {
+	if m == nil {
+		return
+	}
+	m.ReplicationAppliedTotal.WithLabelValues(replica, resultOK(ok)).Inc()
+}
+
+// ObserveReplicationShip records primary ship.
+func (m *Registry) ObserveReplicationShip(replica string, ok bool) {
+	if m == nil {
+		return
+	}
+	m.ReplicationShipTotal.WithLabelValues(replica, resultOK(ok)).Inc()
+}
+
+// ObserveReplicationError records error reason (bounded).
+func (m *Registry) ObserveReplicationError(replica, reason string) {
+	if m == nil {
+		return
+	}
+	m.ReplicationErrorsTotal.WithLabelValues(replica, reason).Inc()
+}
+
+// ObserveReplicationDuplicate records duplicate delivery.
+func (m *Registry) ObserveReplicationDuplicate(replica string) {
+	if m == nil {
+		return
+	}
+	m.ReplicationDuplicatesTotal.WithLabelValues(replica).Inc()
+}
+
+// SetReplicationLag sets sequence lag gauge.
+func (m *Registry) SetReplicationLag(replica string, lag uint64) {
+	if m == nil {
+		return
+	}
+	m.ReplicationLagEvents.WithLabelValues(replica).Set(float64(lag))
+}
+
+// SetReplicationApplied sets applied sequence gauge.
+func (m *Registry) SetReplicationApplied(replica string, seq uint64) {
+	if m == nil {
+		return
+	}
+	m.ReplicationAppliedSeq.WithLabelValues(replica).Set(float64(seq))
 }
 
 // ObserveOwnershipAcquire records acquire ok/fail.

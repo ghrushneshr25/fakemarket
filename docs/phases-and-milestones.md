@@ -1273,15 +1273,37 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.4 Replication next)
+### Phase status: 🔧 In progress (P9.4 Replication implemented — CTO acceptance pending)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
 | P9.2 | Multi-worker execution | 🟢 ACCEPTED (`28f3d1f` / `79f3e89`) |
 | P9.3 | Shard ownership | 🟢 ACCEPTED / CLOSED (`f514a63`) |
-| P9.4 | Replication | ⏭️ NEXT |
-| P9.4+ | Consensus / failover | ⏳ |
+| P9.4 | Replication | 🔧 IMPLEMENTED (ADR 0058; formal accept pending) |
+| P9.5+ | Failover / consensus | ⏳ |
+
+## P9.4 — Replication
+
+| | |
+|--|--|
+| **Status** | 🔧 **IMPLEMENTED** (WAL shipping; CTO 🟢 pending) |
+| **Code** | `internal/replication/` (role, replica, hub, primary) |
+| **Docs** | [P9.4-REPLICATION.md](./distributed/P9.4-REPLICATION.md), [ADR 0058](./adr/0058-replication.md), [Q-bank](./interview/P9.4-REPLICATION-QBANK.md) |
+
+### Delivered
+
+1. Explicit PRIMARY/REPLICA roles; replica cannot execute/match/append  
+2. WAL shipping via Hub; Receive → durable → ApplyEvent  
+3. Positions: received / durable / applied; lag = tip − applied  
+4. Strict sequence; gap/regression → FAILED; duplicates no-op  
+5. Catch-up, restart from local replica WAL, multi-replica equivalence  
+6. Canonical fingerprint vs primary RecoverDir; P8.6 on replica  
+7. Metrics (bounded replica_id); fuzz/race/bench; no auto-promote  
+
+### Non-goals preserved
+
+No failover, consensus, Raft, quorum, distributed ownership, or automatic promotion.
 
 ## P9.3 — Shard Ownership
 
@@ -1453,4 +1475,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.3 🟢 ACCEPTED/CLOSED (`f514a63`); P9.4 Replication next.
+**Last updated:** 2026-10-18 — P9.4 Replication IMPLEMENTED (ADR 0058); formal CTO accept pending.
