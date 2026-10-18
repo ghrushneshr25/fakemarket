@@ -1273,7 +1273,7 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.5 Failover implemented — CTO acceptance pending)
+### Phase status: 🔧 In progress (P9.6 Consensus / Split-Brain next)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
@@ -1281,30 +1281,37 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 | P9.2 | Multi-worker execution | 🟢 ACCEPTED (`28f3d1f` / `79f3e89`) |
 | P9.3 | Shard ownership | 🟢 ACCEPTED / CLOSED (`f514a63`) |
 | P9.4 | Replication | 🟢 ACCEPTED / CLOSED (`03baa31` / `51dbc31`) |
-| P9.5 | Failover | 🔧 IMPLEMENTED (ADR 0059; formal accept pending) |
-| P9.6+ | Consensus / split-brain | ⏳ |
+| P9.5 | Failover | 🟢 ACCEPTED / CLOSED (`7920694` / `04831af`) |
+| P9.6 | Consensus / split-brain | ⏭️ NEXT |
 
 ## P9.5 — Failover
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (CTO 🟢 pending) |
-| **Code** | `internal/failover/` (authority, promote, node) |
+| **Status** | 🟢 **ACCEPTED / CLOSED** (`7920694`) |
+| **Code** | `internal/failover/`, `TradingService` AuthorityGate on Submit/Cancel |
 | **Docs** | [P9.5-FAILOVER.md](./distributed/P9.5-FAILOVER.md), [ADR 0059](./adr/0059-failover.md), [Q-bank](./interview/P9.5-FAILOVER-QBANK.md) |
 
 ### Delivered
 
 1. ClusterAuthority + AuthorityToken epoch/generation fencing  
-2. Fence-before-new-authority promotion order  
-3. Eligibility (P8.6, durable==applied, healthy)  
-4. Replica selection (max applied, lexical NodeID)  
-5. WAL OpenResumed continuity (N+1)  
-6. Stale/dual-writer rejection tests; failed promote fail-closed  
-7. Metrics; fuzz; race  
+2. Fence-before-write promotion; structural Service gate (A2)  
+3. Real-service stale Submit/Cancel zero-mutation tests  
+4. Eligibility, replica selection, WAL N+1 continuity  
+5. Option A fencing domain (shared in-process; not cross-process)  
+6. A1–A14 acceptance invariants closed  
 
-### Known limitation
+### Carry-forward to P9.6 (Consensus / Split-Brain)
 
-In-process shared ClusterAuthority is fencing SoT — not multi-process consensus (P9.6).
+1. Cross-process fencing when nodes cannot share ClusterAuthority  
+2. Network partition / competing Primary beliefs  
+3. Quorum, leader election, term/epoch across processes  
+4. Exactly-one-writer under partition  
+5. Do not collapse P9.5 failover into full consensus  
+
+### Known limitation (accepted)
+
+In-process shared ClusterAuthority + Service gate; cross-process fencing is P9.6.
 
 ## P9.4 — Replication
 
@@ -1507,4 +1514,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.5 Failover IMPLEMENTED (ADR 0059); formal CTO accept pending.
+**Last updated:** 2026-10-18 — P9.5 🟢 ACCEPTED/CLOSED (`7920694`); P9.6 Consensus/Split-Brain next.
