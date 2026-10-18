@@ -26,8 +26,8 @@ type Node struct {
 	electionTicks int
 	// lastLogIndex = durable financial Event.Sequence (election safety / log freshness)
 	lastLogIndex uint64
-	// commitIndex = last committed authority install (consensus meta, not Event.Sequence)
-	commitIndex uint64
+	// authorityGeneration = last AuthorityGeneration from shared auth
+	authorityGeneration uint64
 	// votes received in current candidacy
 	votesGranted map[NodeID]struct{}
 
@@ -186,11 +186,11 @@ func (n *Node) AuthorizeCommand() error {
 	return nil
 }
 
-// CommitIndex returns last consensus authority commit index.
-func (n *Node) CommitIndex() uint64 {
+// AuthorityGeneration returns last committed authority generation.
+func (n *Node) AuthorityGeneration() uint64 {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	return n.commitIndex
+	return n.authorityGeneration
 }
 
 // SharedAuth returns the shared authority store (may be nil).
@@ -351,9 +351,9 @@ func (n *Node) becomeLeaderLocked() {
 			return
 		}
 		rec := n.auth.Get()
-		n.commitIndex = rec.CommitIndex
+		n.authorityGeneration = rec.AuthorityGeneration
 	} else {
-		n.commitIndex++
+		n.authorityGeneration++
 	}
 	n.role = RoleLeader
 	n.leaderID = n.id
@@ -424,7 +424,7 @@ func (n *Node) ForceElection() {
 	n.startElectionLocked()
 }
 
-// Drain processes pending inbox messages once.
+// Drain processes pending inbox messages once (in-memory transport).
 func (n *Node) Drain() {
 	for {
 		select {
@@ -435,3 +435,13 @@ func (n *Node) Drain() {
 		}
 	}
 }
+
+// PollFile drains file-transport mailbox if net is *FileTransport.
+func (n *Node) PollFile() {
+	if ft, ok := n.net.(*FileTransport); ok {
+		ft.Poll(n.id, n.handle)
+	}
+}
+
+// HandleMessage exposes handle for external drivers (tests).
+func (n *Node) HandleMessage(msg Message) { n.handle(msg) }

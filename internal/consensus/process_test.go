@@ -258,7 +258,7 @@ func TestP96_LogFreshness_RejectsStaleCandidate(t *testing.T) {
 	}
 }
 
-func TestP96_CommitIndex_AdvancesOnLeadership(t *testing.T) {
+func TestP96_AuthorityGeneration_AdvancesOnLeadership(t *testing.T) {
 	c, err := consensus.NewCluster(t.TempDir(), []consensus.NodeID{"A", "B", "C"}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -268,8 +268,8 @@ func TestP96_CommitIndex_AdvancesOnLeadership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Nodes[id].CommitIndex() == 0 {
-		t.Fatal("commit index should advance on leadership")
+	if c.Nodes[id].AuthorityGeneration() == 0 {
+		t.Fatal("authority generation should advance on leadership")
 	}
 	rec := c.Nodes[id].SharedAuth().Get()
 	if rec.LeaderID != id {

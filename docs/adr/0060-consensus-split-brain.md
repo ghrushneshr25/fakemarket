@@ -15,12 +15,13 @@ quorum** so a minority partition cannot become authoritative.
 1. **Raft-style roles:** Follower → Candidate → Leader.
 2. **Quorum:** `floor(N/2)+1` votes required to become leader.
 3. **Durable metadata:** `currentTerm` + `votedFor` in `consensus-meta.json` (not financial WAL).
-4. **SharedAuthority:** `authority.json` committed leader+term+FinancialSeq — cross-process fence SoT.
-5. **Authority effective only after CommitLeader fsync** (when shared auth configured).
-6. **Election safety:** reject vote if candidate `LastLogIndex` (durable financial seq) is behind.
-7. **Authority gate:** `AuthorizeCommand` = local Leader **and** SharedAuthority match (reload disk).
-8. **Partition model:** in-process `Network` + cross-process SharedAuthority child test.
-9. **Safety over liveness:** total partition → zero leaders OK; dual financial writers **never** OK.
+4. **Election transport:** in-memory Network **or** FileTransport (cross-process capable RPC files).
+5. **SharedAuthority:** `authority.json` is **fencing after election**, not the election itself.
+6. **AuthorityGeneration** (not Raft CommitIndex) + **AuthoritativeFinancialSeq**.
+7. **Authority effective only after CommitLeader fsync**.
+8. **LastLogIndex** = replicated/durable financial prefix only (unreplicated suffix not advertised).
+9. **AuthorizeCommand** = local Leader ∧ SharedAuthority match (disk reload).
+10. **Safety over liveness:** total partition → zero leaders OK; dual financial writers **never** OK.
 
 ## Financial WAL vs consensus
 

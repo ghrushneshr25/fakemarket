@@ -9,15 +9,25 @@ import (
 )
 
 // AuthorityRecord is the quorum-committed authority (durable across processes).
-// Distinct from financial WAL. Linearization of "who may write":
+// Distinct from financial WAL.
 //
-//	election win → durable AuthorityRecord fsync → AuthorizeCommand may succeed
+// Terminology:
+//
+//	AuthorityGeneration — monotonic install counter (NOT a Raft log CommitIndex)
+//	AuthoritativeFinancialSeq — durable financial Event.Sequence at leadership commit
+//	  (must be the replicated/durable prefix only; unreplicated suffix is not authoritative)
+//
+// Linearization of "who may write":
+//
+//	quorum election → durable AuthorityRecord fsync → AuthorizeCommand may succeed
+//
+// authority.json is a FENCING / committed-authority artifact AFTER election,
+// not the election mechanism itself.
 type AuthorityRecord struct {
-	Term         Term   `json:"term"`
-	LeaderID     NodeID `json:"leader_id"`
-	CommitIndex  uint64 `json:"commit_index"`  // consensus meta index (authority installs)
-	FinancialSeq uint64 `json:"financial_seq"` // leader's durable Event.Sequence at commit
-	Generation   string `json:"generation"`    // cluster generation
+	Term                      Term   `json:"term"`
+	LeaderID                  NodeID `json:"leader_id"`
+	AuthorityGeneration       uint64 `json:"authority_generation"`
+	AuthoritativeFinancialSeq uint64 `json:"authoritative_financial_seq"`
 }
 
 // SharedAuthority is a disk-backed authority SoT readable by independent processes.
@@ -78,8 +88,8 @@ func (s *SharedAuthority) CommitLeader(term Term, leader NodeID, financialSeq ui
 	}
 	s.rec = AuthorityRecord{
 		Term: term, LeaderID: leader,
-		CommitIndex:  s.rec.CommitIndex + 1,
-		FinancialSeq: financialSeq,
+		AuthorityGeneration:       s.rec.AuthorityGeneration + 1,
+		AuthoritativeFinancialSeq: financialSeq,
 	}
 	return s.persistLocked()
 }
