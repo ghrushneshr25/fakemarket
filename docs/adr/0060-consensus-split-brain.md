@@ -15,10 +15,12 @@ quorum** so a minority partition cannot become authoritative.
 1. **Raft-style roles:** Follower → Candidate → Leader.
 2. **Quorum:** `floor(N/2)+1` votes required to become leader.
 3. **Durable metadata:** `currentTerm` + `votedFor` in `consensus-meta.json` (not financial WAL).
-4. **Election safety:** reject vote if candidate `LastLogIndex` (financial seq watermark) is behind.
-5. **Authority gate:** `consensus.Node` implements `trading.AuthorityGate`; only Leader authorizes Submit/Cancel.
-6. **Partition model:** in-process `Network` with explicit Partition/Heal/Isolate for deterministic tests.
-7. **Safety over liveness:** total partition → zero leaders OK; two leaders accepting commands **never** OK.
+4. **SharedAuthority:** `authority.json` committed leader+term+FinancialSeq — cross-process fence SoT.
+5. **Authority effective only after CommitLeader fsync** (when shared auth configured).
+6. **Election safety:** reject vote if candidate `LastLogIndex` (durable financial seq) is behind.
+7. **Authority gate:** `AuthorizeCommand` = local Leader **and** SharedAuthority match (reload disk).
+8. **Partition model:** in-process `Network` + cross-process SharedAuthority child test.
+9. **Safety over liveness:** total partition → zero leaders OK; dual financial writers **never** OK.
 
 ## Financial WAL vs consensus
 

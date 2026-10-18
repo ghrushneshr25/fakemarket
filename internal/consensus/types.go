@@ -50,6 +50,9 @@ type Config struct {
 	Members []NodeID
 	// DataDir persists currentTerm + votedFor (required for multi-node safety).
 	DataDir string
+	// SharedAuthDir holds authority.json readable by independent OS processes (cross-process fence).
+	// Empty = in-process only (local isLeader still used; no cross-process SoT).
+	SharedAuthDir string
 	// ElectionTimeoutTicks: candidate starts after this many ticks without heartbeat (tests use manual ticks).
 	ElectionTimeoutTicks int
 	// HeartbeatEveryTicks: leader sends heartbeat every N ticks.

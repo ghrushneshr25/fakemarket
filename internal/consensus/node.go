@@ -14,6 +14,7 @@ type Node struct {
 	cfg   Config
 	net   Transport
 	store *Store
+	auth  *SharedAuthority // optional cross-process committed authority
 	m     *metrics.Registry
 
 	mu            sync.Mutex
@@ -23,8 +24,10 @@ type Node struct {
 	leaderID      NodeID
 	ticks         int
 	electionTicks int
-	// lastLogIndex = financial Event.Sequence watermark (election safety)
+	// lastLogIndex = durable financial Event.Sequence (election safety / log freshness)
 	lastLogIndex uint64
+	// commitIndex = last committed authority install (consensus meta, not Event.Sequence)
+	commitIndex uint64
 	// votes received in current candidacy
 	votesGranted map[NodeID]struct{}
 
@@ -65,11 +68,20 @@ func NewNode(id NodeID, cfg Config, net Transport, m *metrics.Registry) (*Node, 
 		// memory-only for single-process unit tests without disk
 		store = &Store{st: durableState{}}
 	}
+	var shared *SharedAuthority
+	if cfg.SharedAuthDir != "" {
+		var err2 error
+		shared, err2 = OpenSharedAuthority(cfg.SharedAuthDir)
+		if err2 != nil {
+			return nil, err2
+		}
+	}
 	n := &Node{
 		id:           id,
 		cfg:          cfg,
 		net:          net,
 		store:        store,
+		auth:         shared,
 		m:            m,
 		role:         RoleFollower,
 		term:         store.Term(),
@@ -82,6 +94,17 @@ func NewNode(id NodeID, cfg Config, net Transport, m *metrics.Registry) (*Node, 
 		net.Register(id, n.inbox)
 	}
 	n.authTerm.Store(uint64(n.term))
+	// If shared authority says someone else is leader at our term or higher, stay follower.
+	if shared != nil {
+		rec := shared.Get()
+		if rec.Term > n.term {
+			_ = store.ObserveTerm(rec.Term)
+			n.term = store.Term()
+		}
+		if rec.LeaderID != "" && rec.LeaderID != id {
+			n.isLeader.Store(false)
+		}
+	}
 	return n, nil
 }
 
@@ -130,22 +153,48 @@ func (n *Node) LastLogIndex() uint64 {
 }
 
 // AuthorizeCommand implements trading.AuthorityGate.
-// Only the current leader with matching term may authorize financial writes.
+//
+// Linearization for financial authority:
+//  1. Local role is Leader for durable term
+//  2. If SharedAuthority configured: re-read disk; must be committed leader for that term
+//
+// This fences isolated old leaders that still believe they are Leader in-memory
+// once another process has committed a higher-term authority record.
 func (n *Node) AuthorizeCommand() error {
-	if !n.isLeader.Load() {
-		return ErrNotLeader
-	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.role != RoleLeader {
+	if n.role != RoleLeader || !n.isLeader.Load() {
 		return ErrNotLeader
 	}
-	// Term must match durable term
 	if n.term != n.store.Term() {
 		return ErrStaleTerm
 	}
+	if n.auth != nil {
+		_ = n.auth.Reload()
+		rec := n.auth.Get()
+		if rec.Term > n.term {
+			// Higher committed term — step down
+			n.becomeFollowerLocked(rec.Term, rec.LeaderID)
+			return ErrStaleTerm
+		}
+		if !n.auth.IsAuthoritative(n.id, n.term) {
+			n.isLeader.Store(false)
+			n.role = RoleFollower
+			return ErrNotLeader
+		}
+	}
 	return nil
 }
+
+// CommitIndex returns last consensus authority commit index.
+func (n *Node) CommitIndex() uint64 {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.commitIndex
+}
+
+// SharedAuth returns the shared authority store (may be nil).
+func (n *Node) SharedAuth() *SharedAuthority { return n.auth }
 
 // Start is a no-op; P9.6 nodes are driven synchronously via Tick/Drain for determinism.
 // (Async receive is unnecessary for the in-process partition simulator.)
@@ -290,6 +339,22 @@ func (n *Node) onRequestVoteRespLocked(msg Message) {
 }
 
 func (n *Node) becomeLeaderLocked() {
+	// Durable authority commit BEFORE accepting financial commands.
+	if n.auth != nil {
+		if err := n.auth.CommitLeader(n.term, n.id, n.lastLogIndex); err != nil {
+			// Lost race to another commit — remain follower
+			n.role = RoleFollower
+			n.isLeader.Store(false)
+			if n.m != nil {
+				n.m.ObserveConsensusElection("lost")
+			}
+			return
+		}
+		rec := n.auth.Get()
+		n.commitIndex = rec.CommitIndex
+	} else {
+		n.commitIndex++
+	}
 	n.role = RoleLeader
 	n.leaderID = n.id
 	n.electionTicks = 0

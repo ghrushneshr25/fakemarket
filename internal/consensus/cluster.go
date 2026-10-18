@@ -22,6 +22,7 @@ func NewCluster(root string, members []NodeID, m *metrics.Registry) (*Cluster, e
 	cfg := Config{
 		Members:              members,
 		DataDir:              root,
+		SharedAuthDir:        root + "/shared-auth",
 		ElectionTimeoutTicks: 2,
 		HeartbeatEveryTicks:  1,
 	}
