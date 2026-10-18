@@ -18,26 +18,7 @@ import (
 
 const mpEnv = "FM_CONSENSUS_MP"
 
-// waitStatus polls until cond or timeout.
-func waitStatus(t *testing.T, statusDir string, id consensus.NodeID, wantLeader bool, timeout time.Duration) consensus.NodeStatus {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	var last consensus.NodeStatus
-	for time.Now().Before(deadline) {
-		st, err := consensus.ReadNodeStatus(statusDir, id)
-		if err == nil {
-			last = st
-			if st.IsLeader == wantLeader {
-				return st
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("timeout waiting leader=%v for %s last=%+v", wantLeader, id, last)
-	return last
-}
-
-func spawnMP(t *testing.T, root, nodeID string, members []string, finSeq uint64) *exec.Cmd {
+func spawnMP(t *testing.T, root, nodeID string, members []string, finSeq uint64) {
 	t.Helper()
 	spec := consensus.MultiProcessSpec{
 		Root: root, NodeID: nodeID, Members: members,
@@ -81,13 +62,12 @@ func spawnMP(t *testing.T, root, nodeID string, members []string, finSeq uint64)
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(statusPath); err == nil {
-			return cmd
+			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	rawLog, _ := os.ReadFile(logPath)
 	t.Fatalf("child %s never wrote status; log=%s", nodeID, rawLog)
-	return cmd
 }
 
 // TestP96_ThreeProcess_Partition_BC_Elects is the final cross-process quorum proof.
