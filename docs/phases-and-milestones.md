@@ -1311,7 +1311,7 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
-| P10.1 | Docker / Compose packaging | 🔧 IMPLEMENTED (CTO review pending) |
+| P10.1 | Docker / Compose packaging | 🟢 ACCEPTED / CLOSED (`820c5c4` / `c70f4e2`) |
 | P10.2 | Production observability | ⏭️ NEXT |
 | P10.3 | Trading simulator | ⏳ |
 | P10.4 | E2E failure + recovery demo | ⏳ |
@@ -1323,17 +1323,17 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** |
+| **Status** | 🟢 **ACCEPTED / CLOSED** (`820c5c4`) |
 | **Artifacts** | `Dockerfile`, `docker-compose.yml`, `deploy/prometheus`, `deploy/grafana` |
 | **Docs** | [P10.1-PACKAGING.md](./deploy/P10.1-PACKAGING.md) |
 
 ### Delivered
 
-1. Multi-stage non-root image  
-2. Three-node Compose + Prometheus + Grafana  
-3. Per-node named volumes (`/data/wal`, `/data/consensus`)  
-4. `FAKEMARKET_NODE_ID` / data dir env config  
-5. `/health` + `/ready` (ready after data-dir probe)  
+1. Multi-stage non-root image (`User=fakemarket`)  
+2. Three-node Compose + Prometheus + Grafana (live verified)  
+3. Per-node named volumes; isolation markers A/B/C  
+4. Persistence: `down`→`up` keeps data; `down -v` wipes  
+5. `/health` + `/ready`; metrics scraped  
 6. SIGTERM graceful shutdown  
 
 ### Commands
@@ -1570,4 +1570,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-19 — P10.1 packaging IMPLEMENTED; P10.2 observability next.
+**Last updated:** 2026-10-19 — P10.1 🟢 ACCEPTED/CLOSED; P10.2 Production Observability next.
