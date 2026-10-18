@@ -1312,7 +1312,7 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 | Milestone | Scope | Status |
 |-----------|--------|--------|
 | P10.1 | Docker / Compose packaging | 🟢 ACCEPTED / CLOSED (`820c5c4` / `c70f4e2`) |
-| P10.2 | Production observability | 🔧 IMPLEMENTED (CTO review pending) |
+| P10.2 | Production observability | 🟢 ACCEPTED / CLOSED (`467ac24`) |
 | P10.3 | Trading simulator | ⏭️ NEXT |
 | P10.4 | E2E failure + recovery demo | ⏳ |
 | P10.5 | Final CTO / production readiness | ⏳ |
@@ -1570,4 +1570,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-19 — P10.2 observability IMPLEMENTED; P10.3 simulator next.
+**Last updated:** 2026-10-19 — P10.2 🟢 ACCEPTED/CLOSED; P10.3 Trading Simulator next.
