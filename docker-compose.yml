@@ -1,0 +1,111 @@
+# P10.1 — three-node FakeMarket + Prometheus + Grafana (no Kubernetes)
+services:
+  node-a:
+    build: .
+    image: fakemarket:local
+    container_name: fake-market-node-a
+    environment:
+      FAKEMARKET_ENV: production
+      FAKEMARKET_NODE_ID: node-a
+      FAKEMARKET_HTTP_PORT: "8080"
+      FAKEMARKET_DATA_DIR: /data
+      FAKEMARKET_WAL_DIR: /data/wal
+      FAKEMARKET_CONSENSUS_DIR: /data/consensus
+    ports:
+      - "8081:8080"
+    volumes:
+      - node-a-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 8s
+    restart: unless-stopped
+
+  node-b:
+    image: fakemarket:local
+    container_name: fake-market-node-b
+    depends_on:
+      node-a:
+        condition: service_started
+    environment:
+      FAKEMARKET_ENV: production
+      FAKEMARKET_NODE_ID: node-b
+      FAKEMARKET_HTTP_PORT: "8080"
+      FAKEMARKET_DATA_DIR: /data
+      FAKEMARKET_WAL_DIR: /data/wal
+      FAKEMARKET_CONSENSUS_DIR: /data/consensus
+    ports:
+      - "8082:8080"
+    volumes:
+      - node-b-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 8s
+    restart: unless-stopped
+
+  node-c:
+    image: fakemarket:local
+    container_name: fake-market-node-c
+    depends_on:
+      node-a:
+        condition: service_started
+    environment:
+      FAKEMARKET_ENV: production
+      FAKEMARKET_NODE_ID: node-c
+      FAKEMARKET_HTTP_PORT: "8080"
+      FAKEMARKET_DATA_DIR: /data
+      FAKEMARKET_WAL_DIR: /data/wal
+      FAKEMARKET_CONSENSUS_DIR: /data/consensus
+    ports:
+      - "8083:8080"
+    volumes:
+      - node-c-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 8s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: fake-market-prometheus
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - node-a
+      - node-b
+      - node-c
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: fake-market-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  node-a-data:
+  node-b-data:
+  node-c-data:
+  prometheus-data:
+  grafana-data:

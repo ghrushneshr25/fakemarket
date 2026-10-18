@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet run check clean help proto e2e bench bench-scale profile profile-full
+.PHONY: build test lint fmt vet run check clean help proto e2e bench bench-scale profile profile-full docker-build docker-up docker-down docker-logs
 APP_NAME := fakemarket
 CMD_PATH := ./cmd/fakemarket
 BIN_DIR  := bin
@@ -59,6 +59,22 @@ check: fmt-check vet lint test build
 	@echo "lint        PASS"
 	@echo "tests       PASS"
 	@echo "build       PASS"
+
+## docker-build: build FakeMarket image
+docker-build:
+	docker compose build
+
+## docker-up: start 3-node + prometheus + grafana
+docker-up:
+	docker compose up -d
+
+## docker-down: stop stack (volumes retained)
+docker-down:
+	docker compose down
+
+## docker-logs: follow node logs
+docker-logs:
+	docker compose logs -f node-a node-b node-c
 
 ## bench: P7.4 short reproducible benches (not part of check duration)
 bench:

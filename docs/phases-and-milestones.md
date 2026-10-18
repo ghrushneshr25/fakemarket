@@ -1307,17 +1307,38 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 ---
 
-# P10 — Production Demo (NEXT)
+# P10 — Production Demo
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
-| P10.1 | Docker / Compose packaging | ⏭️ NEXT |
-| P10.2 | Production observability | ⏳ |
+| P10.1 | Docker / Compose packaging | 🔧 IMPLEMENTED (CTO review pending) |
+| P10.2 | Production observability | ⏭️ NEXT |
 | P10.3 | Trading simulator | ⏳ |
 | P10.4 | E2E failure + recovery demo | ⏳ |
 | P10.5 | Final CTO / production readiness | ⏳ |
 
 **P10 goal:** demonstrability and operational maturity — not new distributed-system architecture.
+
+## P10.1 — Packaging
+
+| | |
+|--|--|
+| **Status** | 🔧 **IMPLEMENTED** |
+| **Artifacts** | `Dockerfile`, `docker-compose.yml`, `deploy/prometheus`, `deploy/grafana` |
+| **Docs** | [P10.1-PACKAGING.md](./deploy/P10.1-PACKAGING.md) |
+
+### Delivered
+
+1. Multi-stage non-root image  
+2. Three-node Compose + Prometheus + Grafana  
+3. Per-node named volumes (`/data/wal`, `/data/consensus`)  
+4. `FAKEMARKET_NODE_ID` / data dir env config  
+5. `/health` + `/ready` (ready after data-dir probe)  
+6. SIGTERM graceful shutdown  
+
+### Commands
+
+`make docker-build && make docker-up`
 
 ## P9.5 — Failover
 
@@ -1549,4 +1570,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-19 — P9.6 🟢 ACCEPTED/CLOSED; **P9 CLOSED**; P10 Production Demo next.
+**Last updated:** 2026-10-19 — P10.1 packaging IMPLEMENTED; P10.2 observability next.

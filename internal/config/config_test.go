@@ -61,7 +61,7 @@ func TestValidate_InvalidPort(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := Config{Environment: "development", HTTPPort: tc.port}
+			cfg := Config{Environment: "development", HTTPPort: tc.port, NodeID: "n", DataDir: "/data"}
 			if err := cfg.Validate(); err == nil {
 				t.Fatalf("Validate() expected error for port %d", tc.port)
 			}
@@ -70,7 +70,7 @@ func TestValidate_InvalidPort(t *testing.T) {
 }
 
 func TestValidate_EmptyEnvironment(t *testing.T) {
-	cfg := Config{Environment: "  ", HTTPPort: 8080}
+	cfg := Config{Environment: "  ", HTTPPort: 8080, NodeID: "n", DataDir: "/data"}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() expected error for empty environment")
 	}
@@ -80,5 +80,22 @@ func TestConfig_Addr(t *testing.T) {
 	cfg := Config{HTTPPort: 8080}
 	if got := cfg.Addr(); got != ":8080" {
 		t.Errorf("Addr() = %q, want %q", got, ":8080")
+	}
+}
+
+func TestLoad_NodeAndDataDir(t *testing.T) {
+	t.Setenv("FAKEMARKET_NODE_ID", "node-b")
+	t.Setenv("FAKEMARKET_DATA_DIR", "/var/fm")
+	t.Setenv("FAKEMARKET_HTTP_PORT", "8080")
+	t.Setenv("FAKEMARKET_ENV", "production")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NodeID != "node-b" || cfg.DataDir != "/var/fm" {
+		t.Fatal(cfg)
+	}
+	if cfg.WALDir != "/var/fm/wal" || cfg.ConsensusDir != "/var/fm/consensus" {
+		t.Fatal(cfg.WALDir, cfg.ConsensusDir)
 	}
 }

@@ -22,7 +22,11 @@ func TestNexus_WiresHTTPServerAndMetrics(t *testing.T) {
 	nexus.MustDeclare(app.NewHTTPServer)
 	nexus.MustDeclareGroup("http-routes", app.NewMetricsRoutes)
 
-	cfg := config.Config{Environment: "test", HTTPPort: 18099}
+	dir := t.TempDir()
+	cfg := config.Config{
+		Environment: "test", HTTPPort: 18099, NodeID: "wire-test",
+		DataDir: dir, WALDir: dir + "/wal", ConsensusDir: dir + "/consensus",
+	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}

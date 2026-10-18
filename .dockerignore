@@ -1,0 +1,12 @@
+.git
+.bin
+bin
+docs/benchmarks/profiles/out
+**/*_test.go
+.golangci.yml
+.help
+*.md
+!README.md
+.DS_Store
+data
+tmp

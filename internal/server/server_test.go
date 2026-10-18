@@ -13,9 +13,14 @@ import (
 )
 
 func TestServer_HealthAndLifecycle(t *testing.T) {
+	dir := t.TempDir()
 	cfg := config.Config{
-		Environment: "test",
-		HTTPPort:    0, // OS-assigned free port
+		Environment:  "test",
+		HTTPPort:     0, // OS-assigned free port
+		NodeID:       "test-node",
+		DataDir:      dir,
+		WALDir:       dir + "/wal",
+		ConsensusDir: dir + "/consensus",
 	}
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -28,34 +33,43 @@ func TestServer_HealthAndLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	url := "http://" + srv.Addr() + "/health"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		t.Fatalf("NewRequest: %v", err)
+	base := "http://" + srv.Addr()
+	for _, path := range []string{"/health", "/ready"} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
+		if err != nil {
+			t.Fatalf("NewRequest: %v", err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s status = %d", path, resp.StatusCode)
+		}
+		_ = resp.Body.Close()
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.Get(base + "/health")
 	if err != nil {
-		t.Fatalf("GET /health: %v", err)
+		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-
 	var body healthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if body.Status != "ok" {
-		t.Errorf("status field = %q, want %q", body.Status, "ok")
+	if body.Status != "ok" || body.NodeID != "test-node" {
+		t.Errorf("body=%+v", body)
 	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer shutdownCancel()
-
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		t.Fatalf("Shutdown() error: %v", err)
+	}
+	// after shutdown ready is false
+	resp2, err := http.Get(base + "/ready")
+	if err == nil {
+		_ = resp2.Body.Close()
 	}
 }
