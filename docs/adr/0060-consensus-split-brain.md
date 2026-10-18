@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (implementation complete; formal CTO acceptance pending)
+Accepted — P9.6 CLOSED (`b4fc6e3`); P9 Distributed Exchange CLOSED.
 
 ## Context
 

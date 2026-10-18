@@ -1273,38 +1273,51 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.6 Consensus implemented — CTO acceptance pending)
+### Phase status: 🟢 P9 CLOSED — P10 Production Demo next
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
-| P9.1 | Instrument sharding | 🟢 ACCEPTED (`22ce296` / `208cd01`) |
-| P9.2 | Multi-worker execution | 🟢 ACCEPTED (`28f3d1f` / `79f3e89`) |
-| P9.3 | Shard ownership | 🟢 ACCEPTED / CLOSED (`f514a63`) |
-| P9.4 | Replication | 🟢 ACCEPTED / CLOSED (`03baa31` / `51dbc31`) |
-| P9.5 | Failover | 🟢 ACCEPTED / CLOSED (`7920694` / `04831af`) |
-| P9.6 | Consensus / split-brain | 🔧 IMPLEMENTED (ADR 0060; formal accept pending) |
+| P9.1 | Instrument sharding | 🟢 ACCEPTED |
+| P9.2 | Multi-worker execution | 🟢 ACCEPTED |
+| P9.3 | Shard ownership | 🟢 ACCEPTED / CLOSED |
+| P9.4 | Replication | 🟢 ACCEPTED / CLOSED |
+| P9.5 | Failover | 🟢 ACCEPTED / CLOSED |
+| P9.6 | Consensus / split-brain | 🟢 ACCEPTED / CLOSED (`b4fc6e3` / `6bd88a9`) |
 
 ## P9.6 — Consensus / Split-Brain
 
 | | |
 |--|--|
-| **Status** | 🔧 **IMPLEMENTED** (Raft-style quorum; CTO 🟢 pending) |
-| **Code** | `internal/consensus/` (node, durable, network, cluster) |
+| **Status** | 🟢 **ACCEPTED / CLOSED** (`b4fc6e3`) |
+| **Code** | `internal/consensus/` (election, FileTransport, SharedAuthority, multiprocess) |
 | **Docs** | [P9.6-CONSENSUS.md](./distributed/P9.6-CONSENSUS.md), [ADR 0060](./adr/0060-consensus-split-brain.md), [Q-bank](./interview/P9.6-CONSENSUS-QBANK.md) |
 
 ### Delivered
 
-1. Raft-style Follower/Candidate/Leader + durable term/vote  
-2. Quorum floor(N/2)+1; minority cannot elect  
-3. Partitionable in-process network; heal/stale step-down  
-4. AuthorityGate = IsLeader on TradingService path  
-5. Stale-leader Submit reject + zero WAL/cash mutation  
-6. Total partition → zero writers; elect uniqueness  
-7. Metrics; fuzz quorum; race  
+1. Raft-style quorum election + durable term/vote  
+2. FileTransport + three-OS-process A\|BC partition election  
+3. SharedAuthority fencing after CommitLeader (not the election)  
+4. Structural TradingService gate; stale Submit zero mutation  
+5. No uncommitted suffix policy; majority P8.6; heal → one writer  
+6. Dual-writer oracle; safety over liveness  
 
-### Safety vs liveness
+### P9 closed invariant
 
-Safety: never two authoritative writers. Liveness: elect when quorum available. Total partition: zero leaders OK.
+`successful authoritative financial writers ≤ 1` under the implemented failure model (majority → one; minority/total partition → zero).
+
+---
+
+# P10 — Production Demo (NEXT)
+
+| Milestone | Scope | Status |
+|-----------|--------|--------|
+| P10.1 | Docker / Compose packaging | ⏭️ NEXT |
+| P10.2 | Production observability | ⏳ |
+| P10.3 | Trading simulator | ⏳ |
+| P10.4 | E2E failure + recovery demo | ⏳ |
+| P10.5 | Final CTO / production readiness | ⏳ |
+
+**P10 goal:** demonstrability and operational maturity — not new distributed-system architecture.
 
 ## P9.5 — Failover
 
@@ -1536,4 +1549,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.6 Consensus IMPLEMENTED (ADR 0060); formal CTO accept pending.
+**Last updated:** 2026-10-19 — P9.6 🟢 ACCEPTED/CLOSED; **P9 CLOSED**; P10 Production Demo next.
