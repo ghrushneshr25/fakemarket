@@ -19,12 +19,18 @@ P9.5 adds **controlled authority transfer** when the Primary becomes unavailable
 6. **Replica selection:** highest AppliedSequence, then NodeID lexical order.
 7. **Failure detector:** `DetectFailure` marks suspected unavailability; does not alone promote.
 
-## Explicit non-claims
+## Explicit non-claims (Option A)
 
 - Not Raft/Paxos/quorum consensus.
 - Not global proof of process death (timeout = suspected).
-- In-process shared `ClusterAuthority` is the fencing SoT for the supported model.
-- P9.6 owns formal multi-process split-brain agreement.
+- **Fencing domain:** shared in-process `ClusterAuthority` + structural `TradingService` authority gate.
+- Does **not** claim that an isolated OS process is fenced without observing the shared authority.
+- P9.6 owns formal multi-process split-brain agreement / external fencing primitive.
+
+## Structural enforcement
+
+`TradingService.Submit` / `Cancel` invoke `AuthorityGate.AuthorizeCommand()` when a gate is configured.
+This is not optional per-call documentation — it is on the authoritative path.
 
 ## Consequences
 

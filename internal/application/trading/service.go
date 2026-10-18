@@ -14,14 +14,22 @@ import (
 	"github.com/google/uuid"
 )
 
+// AuthorityGate is the structural failover fence on the authoritative command path (P9.5).
+// When non-nil, every Submit/Cancel must pass AuthorizeCommand before any financial mutation.
+// Implemented by failover.Node (or tests). Nil = single-node / no failover gate (legacy).
+type AuthorityGate interface {
+	AuthorizeCommand() error
+}
+
 // Service is the transport-independent trading command boundary.
 // No grpc/http/protobuf imports.
 type Service struct {
-	router  *Router
-	idem    *IdempotencyStore
-	ready   atomic.Bool
-	metrics *metrics.Registry // optional; nil = no instrumentation
-	log     *slog.Logger      // optional structured lifecycle logs
+	router    *Router
+	idem      *IdempotencyStore
+	ready     atomic.Bool
+	metrics   *metrics.Registry // optional; nil = no instrumentation
+	log       *slog.Logger      // optional structured lifecycle logs
+	authority AuthorityGate     // optional P9.5 fence; checked on every Submit/Cancel
 }
 
 // NewService constructs a TradingService.
@@ -46,8 +54,26 @@ func (s *Service) WithLogger(log *slog.Logger) *Service {
 	return s
 }
 
+// WithAuthority attaches the P9.5 authority fence. Must be set on any service that
+// participates in failover; enforcement is structural on Submit/Cancel.
+func (s *Service) WithAuthority(g AuthorityGate) *Service {
+	s.authority = g
+	return s
+}
+
 // SetReady controls command admission (startup gate). Safe for concurrent use.
 func (s *Service) SetReady(v bool) { s.ready.Store(v) }
+
+// checkAuthority runs the structural failover gate (no-op if authority unset).
+func (s *Service) checkAuthority() error {
+	if s == nil || s.authority == nil {
+		return nil
+	}
+	if err := s.authority.AuthorizeCommand(); err != nil {
+		return fmt.Errorf("%w: %v", ErrAuthorityRejected, err)
+	}
+	return nil
+}
 
 // Submit handles SubmitOrderCommand.
 func (s *Service) Submit(ctx context.Context, cmd SubmitOrderCommand) (SubmitOrderResult, error) {
@@ -60,6 +86,11 @@ func (s *Service) Submit(ctx context.Context, cmd SubmitOrderCommand) (SubmitOrd
 		s.logSubmit(cmd, "", "error", ErrNotReady)
 		s.observeSubmit(metrics.ResultError, start)
 		return SubmitOrderResult{}, ErrNotReady
+	}
+	if err := s.checkAuthority(); err != nil {
+		s.logSubmit(cmd, "", "error", err)
+		s.observeSubmit(metrics.ResultError, start)
+		return SubmitOrderResult{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		s.logSubmit(cmd, "", "error", err)
@@ -115,6 +146,11 @@ func (s *Service) Cancel(ctx context.Context, cmd CancelOrderCommand) (CancelOrd
 		s.logCancel(cmd, "error", ErrNotReady)
 		s.observeCancel(metrics.ResultError, start)
 		return CancelOrderResult{}, ErrNotReady
+	}
+	if err := s.checkAuthority(); err != nil {
+		s.logCancel(cmd, "error", err)
+		s.observeCancel(metrics.ResultError, start)
+		return CancelOrderResult{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		s.logCancel(cmd, "error", err)
