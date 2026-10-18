@@ -156,19 +156,7 @@ func TestP95_ServicePath_StalePrimary_SubmitCancel_ZeroMutation(t *testing.T) {
 		t.Fatal("WAL advanced on stale path")
 	}
 
-	// New primary B: resume writer already from promote; build trading is heavy —
-	// prove B authorizes and can append N+1 via writer continuity already tested.
-	// For service path on B: wire a new node + need a Service with same WAL — use
-	// AuthorizeCommand via a thin service is enough if we bootstrap B from rdir.
-	// BootstrapWorkers on rdir as new primary stack after promote.
-	bootB, err := trading.BootstrapWorkers(filepath.Join(t.TempDir(), "b-live"), 2, 2, cloneSeed(t), trading.MustInstrument("AAPL"))
-	// Note: separate WAL dir won't continue seq — instead attach gate only test B authorize +
-	// use out.Writer for seq. For full service on B with same history, recover into trading is out of scope.
-	// Minimal B service path: create Service with authority only and router empty won't work for submit.
-	// Better: keep bootA as the process; after promote only B has valid token.
-	// Simulate B by installing B token on a second gate attached to a NEW service that shares bootA router?
-	// Clean approach: nodeB on same auth, WithAuthority(nodeB) on bootA.Service after swapping gate.
-	_ = bootB
+	// Swap service gate to B (same trading stack; shared ClusterAuthority domain).
 	nodeB := failover.NewNode("node-B", auth)
 	nodeB.InstallPrimaryToken(out.Token, out.Writer)
 	nodeB.SetReady(true)
