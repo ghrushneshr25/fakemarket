@@ -1,0 +1,70 @@
+# P10.2 high-value operational alerts (not a paging flood).
+groups:
+  - name: fakemarket.ops
+    interval: 15s
+    rules:
+      - alert: FakeMarketNotReady
+        expr: up{job="fakemarket"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FakeMarket target down"
+          description: "Prometheus cannot scrape {{ $labels.instance }} for >1m (node unreachable or process down)."
+
+      - alert: FakeMarketWALFailure
+        expr: increase(fakemarket_wal_append_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WAL append failures"
+          description: "WAL append failures on {{ $labels.instance }} in the last 5m."
+
+      - alert: FakeMarketHighCommandLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, instance) (rate(fakemarket_trading_command_duration_seconds_bucket[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained high trading P99 latency"
+          description: "Trading command P99 > 50ms for 5m on {{ $labels.instance }} (inspect engine phases + WAL)."
+
+      - alert: FakeMarketConsensusElectionsChurn
+        expr: increase(fakemarket_consensus_election_total{result="won"}[10m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Repeated consensus leader changes"
+          description: "More than 3 election wins in 10m — investigate partition or instability."
+
+      - alert: FakeMarketAuthorityRejections
+        expr: increase(fakemarket_consensus_authority_rejections_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated authority rejections"
+          description: "Stale/non-leader command attempts elevated on {{ $labels.instance }}."
+
+      - alert: FakeMarketMarketDataRecoveryFailures
+        expr: increase(fakemarket_marketdata_recovery_failures_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Market-data gap recovery failures"
+          description: "MD recovery failures observed on {{ $labels.instance }}."
+
+      - alert: FakeMarketFailoverFence
+        expr: increase(fakemarket_failover_fence_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "Failover fencing events"
+          description: "Ownership/failover fencing activity — expected during failover demos."
