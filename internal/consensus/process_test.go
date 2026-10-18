@@ -184,9 +184,8 @@ func TestP96_CrossProcess_SharedAuthority_FencesOldLeader(t *testing.T) {
 		t.Fatal("cash mutated")
 	}
 	// Shared auth shows B
-	rec := auth.Get()
 	_ = auth.Reload()
-	rec = auth.Get()
+	rec := auth.Get()
 	if rec.LeaderID != "B" {
 		t.Fatalf("leader=%s", rec.LeaderID)
 	}
@@ -234,10 +233,6 @@ func TestP96_LogFreshness_RejectsStaleCandidate(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		c.Nodes["C"].Drain()
 		c.Nodes["B"].Drain()
-	}
-	// B should not get C's vote
-	if c.Nodes["B"].IsLeader() && c.Nodes["C"].LastLogIndex() > 40 {
-		// B alone can't be leader with 3 members without votes
 	}
 	// C campaigns with fresher log
 	c.Nodes["C"].SetLastLogIndex(90)
