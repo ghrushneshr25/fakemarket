@@ -147,10 +147,9 @@ func (n *Node) AuthorizeCommand() error {
 	return nil
 }
 
-// Start begins the receive loop (non-blocking).
-func (n *Node) Start() {
-	go n.loop()
-}
+// Start is a no-op; P9.6 nodes are driven synchronously via Tick/Drain for determinism.
+// (Async receive is unnecessary for the in-process partition simulator.)
+func (n *Node) Start() {}
 
 // Stop stops the node.
 func (n *Node) Stop() {
@@ -161,31 +160,31 @@ func (n *Node) Stop() {
 	}
 }
 
-func (n *Node) loop() {
+// Tick drains inbound messages then advances election/heartbeat timers (deterministic).
+func (n *Node) Tick() {
+	// Drain inbox without holding lock across handle (handle takes lock).
 	for {
 		select {
-		case <-n.stop:
-			return
 		case msg := <-n.inbox:
 			n.handle(msg)
+		default:
+			goto drained
 		}
 	}
-}
-
-// Tick advances election/heartbeat timers (deterministic test clock).
-func (n *Node) Tick() {
+drained:
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.ticks++
 	switch n.role {
 	case RoleFollower, RoleCandidate:
 		n.electionTicks++
-		// Stagger timeouts slightly by node id hash to reduce split votes in tests
 		timeout := n.cfg.ElectionTimeoutTicks
 		if timeout < 1 {
 			timeout = 3
 		}
-		if n.electionTicks >= timeout {
+		// Stagger by node id length to reduce simultaneous candidacy
+		to := timeout + int(n.id[0])%2
+		if n.electionTicks >= to {
 			n.startElectionLocked()
 		}
 	case RoleLeader:
@@ -276,6 +275,8 @@ func (n *Node) onRequestVoteLocked(msg Message) {
 	})
 }
 
+// debug helpers available via Term/Role/IsLeader
+
 func (n *Node) onRequestVoteRespLocked(msg Message) {
 	if n.role != RoleCandidate || msg.Term != n.term {
 		return
@@ -349,4 +350,23 @@ func (n *Node) StepDown() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.becomeFollowerLocked(n.term, "")
+}
+
+// ForceElection starts a candidacy immediately (deterministic tests).
+func (n *Node) ForceElection() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.startElectionLocked()
+}
+
+// Drain processes pending inbox messages once.
+func (n *Node) Drain() {
+	for {
+		select {
+		case msg := <-n.inbox:
+			n.handle(msg)
+		default:
+			return
+		}
+	}
 }

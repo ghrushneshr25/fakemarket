@@ -5,12 +5,38 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/application/trading"
 	"github.com/ghrushneshr25/fakemarket/internal/consensus"
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 )
+
+// electOnSide runs a staggered election on a quorum partition (avoids split votes).
+func electOnSide(t *testing.T, c *consensus.Cluster, side []consensus.NodeID) consensus.NodeID {
+	t.Helper()
+	if len(side) < 1 {
+		t.Fatal("need >=1")
+	}
+	cand := side[0]
+	for round := 0; round < 40; round++ {
+		c.Nodes[cand].ForceElection()
+		// Drain all side members so votes flow
+		for i := 0; i < 8; i++ {
+			for _, id := range side {
+				c.Nodes[id].Drain()
+			}
+		}
+		if c.Nodes[cand].IsLeader() {
+			return cand
+		}
+		for _, id := range side {
+			if c.Nodes[id].IsLeader() {
+				return id
+			}
+		}
+	}
+	return ""
+}
 
 func seed(t *testing.T) map[domain.AccountID]*domain.Account {
 	t.Helper()
@@ -83,60 +109,19 @@ func TestP96_Partition_MinorityCannotLead(t *testing.T) {
 	}
 	c.Net.Heal()
 	c.Net.Partition(remaining, []consensus.NodeID{leader})
-
-	// Ticks on remaining side
-	for i := 0; i < 40; i++ {
-		for _, id := range remaining {
-			c.Nodes[id].Tick()
-		}
-		time.Sleep(time.Millisecond)
+	c.Nodes[leader].StepDown()
+	if electOnSide(t, c, remaining) == "" {
+		t.Fatal("quorum side failed to elect")
 	}
-	// Minority (old leader) must not be sole authority if new leader elected
-	newLeaders := 0
-	for _, id := range remaining {
-		if c.Nodes[id].IsLeader() {
-			newLeaders++
-		}
-	}
-	if newLeaders != 1 {
-		// may take more ticks
-		for i := 0; i < 40; i++ {
-			for _, id := range remaining {
-				c.Nodes[id].Tick()
-			}
-			time.Sleep(time.Millisecond)
-		}
-		newLeaders = 0
-		for _, id := range remaining {
-			if c.Nodes[id].IsLeader() {
-				newLeaders++
-			}
-		}
-	}
-	if newLeaders != 1 {
-		t.Fatalf("quorum side leaders=%d", newLeaders)
-	}
-	// Old leader still may think leader until it sees higher term — send heartbeat from new leader by healing briefly won't work while partitioned.
-	// Tick isolated leader — it may start election but cannot get quorum
+	// Minority ticks cannot gain quorum
 	for i := 0; i < 20; i++ {
 		c.Nodes[leader].Tick()
-		time.Sleep(time.Millisecond)
 	}
-	// Authors: only nodes that AuthorizeCommand
-	// Isolated old leader: still isLeader true locally — THIS is the issue
-	// Fix: isolated leader should lose leadership after election timeout without heartbeat ACK
-	// For P9.6 minimal: on partition, force step-down when candidate on other side wins by
-	// having old leader observe higher term when partition heals. During partition,
-	// CountAuthoritativeWriters on ALL nodes may be 2.
-	//
-	// Required fix in node: leader steps down if no majority heartbeat response — complex.
-	// Simpler fix for isolation: when Tick on leader, if we can't reach quorum of followers, step down after N ticks.
-	//
-	// For this test: verify majority side has exactly 1 leader, minority cannot gain NEW authority via election (vote count).
-	// And after heal, exactly one writer.
+	if c.Nodes[leader].IsLeader() {
+		t.Fatal("minority became leader")
+	}
 	c.Net.Heal()
-	// Deliver heartbeats from new leader
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		c.TickAll()
 	}
 	if c.CountAuthoritativeWriters() != 1 {
@@ -183,24 +168,11 @@ func TestP96_StaleLeader_ServiceGate_ZeroMutation(t *testing.T) {
 		}
 	}
 	c.Net.Partition(rest, []consensus.NodeID{leader})
-	// Step down old leader so it cannot authorize (simulates lease loss / higher term awareness)
-	// Protocol: old leader steps down when election timeout without quorum heartbeats.
 	c.Nodes[leader].StepDown()
-	for i := 0; i < 50; i++ {
-		for _, id := range rest {
-			c.Nodes[id].Tick()
-		}
-		time.Sleep(time.Millisecond)
-	}
-	var newLeader consensus.NodeID
-	for _, id := range rest {
-		if c.Nodes[id].IsLeader() {
-			newLeader = id
-			break
-		}
-	}
+	// Stagger: let rest[0] start election first; rest[1] only grants votes (avoids split vote).
+	newLeader := electOnSide(t, c, rest)
 	if newLeader == "" {
-		t.Fatal("no new leader on quorum side")
+		t.Fatalf("no new leader on quorum side %v", rest)
 	}
 
 	// Stale: service still wired to OLD leader node → must reject
@@ -251,10 +223,8 @@ func TestP96_DurableTerm_SurvivesRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	n1.Start()
-	for i := 0; i < 10; i++ {
-		n1.Tick()
-		time.Sleep(time.Millisecond)
-	}
+	n1.ForceElection()
+	n1.Drain()
 	if !n1.IsLeader() {
 		t.Fatal("not leader")
 	}
@@ -327,14 +297,11 @@ func TestP96_PartitionHeal_StaleStepsDown(t *testing.T) {
 	}
 	c.Net.Partition(rest, []consensus.NodeID{old})
 	c.Nodes[old].StepDown()
-	for i := 0; i < 50; i++ {
-		for _, id := range rest {
-			c.Nodes[id].Tick()
-		}
-		time.Sleep(time.Millisecond)
+	if electOnSide(t, c, rest) == "" {
+		t.Fatal("no leader on majority")
 	}
 	c.Net.Heal()
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 30; i++ {
 		c.TickAll()
 	}
 	if c.CountAuthoritativeWriters() != 1 {

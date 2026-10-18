@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 )
@@ -45,25 +44,60 @@ func (c *Cluster) Stop() {
 	}
 }
 
-// TickAll advances every node once and drains messages (deterministic).
+// TickAll advances every node twice (send + receive drain) for deterministic delivery.
 func (c *Cluster) TickAll() {
 	for _, n := range c.Nodes {
 		n.Tick()
 	}
-	// Allow message delivery
-	time.Sleep(time.Millisecond)
+	// Second pass drains messages delivered by first pass
+	for _, n := range c.Nodes {
+		n.Tick()
+	}
 }
 
-// ElectLeader ticks until exactly one leader or maxRounds.
+// ElectLeader forces a deterministic election from the first member, then drains.
 func (c *Cluster) ElectLeader(maxRounds int) (NodeID, error) {
+	if len(c.Cfg.Members) == 0 {
+		return "", ErrInvalidConfig
+	}
+	// Deterministic: first member campaigns; others vote.
+	first := c.Cfg.Members[0]
+	c.Nodes[first].ForceElection()
 	for i := 0; i < maxRounds; i++ {
-		c.TickAll()
+		for _, n := range c.Nodes {
+			n.Drain()
+		}
 		leaders := c.Leaders()
 		if len(leaders) == 1 {
 			return leaders[0], nil
 		}
+		// Retry campaign if split
+		if len(leaders) == 0 && i%3 == 2 {
+			c.Nodes[first].ForceElection()
+		}
 	}
 	return "", fmt.Errorf("%w: leaders=%v", ErrNoQuorum, c.Leaders())
+}
+
+// ElectOn forces election from a specific node (partition majority tests).
+func (c *Cluster) ElectOn(id NodeID, maxRounds int) (NodeID, error) {
+	n, ok := c.Nodes[id]
+	if !ok {
+		return "", ErrNotMember
+	}
+	n.ForceElection()
+	for i := 0; i < maxRounds; i++ {
+		for _, node := range c.Nodes {
+			node.Drain()
+		}
+		if n.IsLeader() {
+			return id, nil
+		}
+		if i%3 == 2 {
+			n.ForceElection()
+		}
+	}
+	return "", fmt.Errorf("%w: %s not leader leaders=%v", ErrNoQuorum, id, c.Leaders())
 }
 
 // Leaders returns nodes that currently believe they are leader.
