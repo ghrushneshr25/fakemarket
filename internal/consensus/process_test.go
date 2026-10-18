@@ -25,6 +25,10 @@ func TestMain(m *testing.M) {
 		runConsensusChild()
 		return
 	}
+	if os.Getenv("FM_CONSENSUS_MP") == "1" {
+		consensus.RunMultiProcessChild()
+		return
+	}
 	os.Exit(m.Run())
 }
 

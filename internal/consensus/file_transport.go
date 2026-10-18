@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // FileTransport delivers consensus RPCs via a shared directory (cross-process).
@@ -16,9 +17,8 @@ import (
 //	<root>/mail/<to>/<seq>-<from>.json
 //	<root>/partition.json  {"blocked":[["A","B"],...]}
 type FileTransport struct {
-	mu   sync.Mutex
 	root string
-	seq  uint64
+	seq  atomic.Uint64
 }
 
 // NewFileTransport creates a file-based transport rooted at dir.
@@ -74,17 +74,15 @@ func (t *FileTransport) Send(msg Message) {
 	if t.blocked(msg.From, msg.To) {
 		return
 	}
-	t.mu.Lock()
-	t.seq++
-	seq := t.seq
-	t.mu.Unlock()
+	seq := t.seq.Add(1)
 	dir := filepath.Join(t.root, "mail", string(msg.To))
 	_ = os.MkdirAll(dir, 0o700)
 	raw, err := json.Marshal(msg)
 	if err != nil {
 		return
 	}
-	name := filepath.Join(dir, fmt.Sprintf("%012d-%s.json", seq, msg.From))
+	// Unique across processes: nano + local seq + from
+	name := filepath.Join(dir, fmt.Sprintf("%d-%d-%s.json", time.Now().UnixNano(), seq, msg.From))
 	tmp := name + ".tmp"
 	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
 		return
