@@ -1273,7 +1273,7 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 
 # P9 — Distributed Exchange
 
-### Phase status: 🔧 In progress (P9.6 Consensus / Split-Brain next)
+### Phase status: 🔧 In progress (P9.6 Consensus implemented — CTO acceptance pending)
 
 | Milestone | Scope | Status |
 |-----------|--------|--------|
@@ -1282,7 +1282,29 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 | P9.3 | Shard ownership | 🟢 ACCEPTED / CLOSED (`f514a63`) |
 | P9.4 | Replication | 🟢 ACCEPTED / CLOSED (`03baa31` / `51dbc31`) |
 | P9.5 | Failover | 🟢 ACCEPTED / CLOSED (`7920694` / `04831af`) |
-| P9.6 | Consensus / split-brain | ⏭️ NEXT |
+| P9.6 | Consensus / split-brain | 🔧 IMPLEMENTED (ADR 0060; formal accept pending) |
+
+## P9.6 — Consensus / Split-Brain
+
+| | |
+|--|--|
+| **Status** | 🔧 **IMPLEMENTED** (Raft-style quorum; CTO 🟢 pending) |
+| **Code** | `internal/consensus/` (node, durable, network, cluster) |
+| **Docs** | [P9.6-CONSENSUS.md](./distributed/P9.6-CONSENSUS.md), [ADR 0060](./adr/0060-consensus-split-brain.md), [Q-bank](./interview/P9.6-CONSENSUS-QBANK.md) |
+
+### Delivered
+
+1. Raft-style Follower/Candidate/Leader + durable term/vote  
+2. Quorum floor(N/2)+1; minority cannot elect  
+3. Partitionable in-process network; heal/stale step-down  
+4. AuthorityGate = IsLeader on TradingService path  
+5. Stale-leader Submit reject + zero WAL/cash mutation  
+6. Total partition → zero writers; elect uniqueness  
+7. Metrics; fuzz quorum; race  
+
+### Safety vs liveness
+
+Safety: never two authoritative writers. Liveness: elect when quorum available. Total partition: zero leaders OK.
 
 ## P9.5 — Failover
 
@@ -1514,4 +1536,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-18 — P9.5 🟢 ACCEPTED/CLOSED (`7920694`); P9.6 Consensus/Split-Brain next.
+**Last updated:** 2026-10-18 — P9.6 Consensus IMPLEMENTED (ADR 0060); formal CTO accept pending.

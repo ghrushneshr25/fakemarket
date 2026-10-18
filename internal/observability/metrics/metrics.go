@@ -94,6 +94,12 @@ type Registry struct {
 	FailoverAttemptsTotal   *prometheus.CounterVec // result=
 	FailoverFenceTotal      *prometheus.CounterVec // reason=
 	FailoverDurationSeconds prometheus.Histogram
+
+	// P9.6 consensus (bounded node labels)
+	ConsensusElectionTotal *prometheus.CounterVec // result=start|won|lost
+	ConsensusTerm          *prometheus.GaugeVec   // node
+	ConsensusIsLeader      *prometheus.GaugeVec   // node
+	ConsensusAuthorityRej  *prometheus.CounterVec // reason
 }
 
 // latencyBuckets are fixed µs–ms style buckets for exchange ops (seconds).
@@ -168,7 +174,48 @@ func New() *Registry {
 	m.FailoverFenceTotal = mustCounterVec(r, "fakemarket_failover_fence_total", "Authority fencing events", "reason")
 	m.FailoverDurationSeconds = mustHist(r, "fakemarket_failover_duration_seconds", "Promotion duration")
 
+	m.ConsensusElectionTotal = mustCounterVec(r, "fakemarket_consensus_election_total", "Consensus elections (P9.6)", "result")
+	m.ConsensusTerm = mustGaugeVec(r, "fakemarket_consensus_term", "Current consensus term", "node")
+	m.ConsensusIsLeader = mustGaugeVec(r, "fakemarket_consensus_is_leader", "1 if node is leader", "node")
+	m.ConsensusAuthorityRej = mustCounterVec(r, "fakemarket_consensus_authority_rejections_total", "Authority rejections", "reason")
+
 	return m
+}
+
+// ObserveConsensusElection records election event.
+func (m *Registry) ObserveConsensusElection(result string) {
+	if m == nil {
+		return
+	}
+	m.ConsensusElectionTotal.WithLabelValues(result).Inc()
+}
+
+// SetConsensusTerm sets term gauge.
+func (m *Registry) SetConsensusTerm(node string, term uint64) {
+	if m == nil {
+		return
+	}
+	m.ConsensusTerm.WithLabelValues(node).Set(float64(term))
+}
+
+// SetConsensusLeader sets leader gauge.
+func (m *Registry) SetConsensusLeader(node string, leader bool) {
+	if m == nil {
+		return
+	}
+	v := 0.0
+	if leader {
+		v = 1
+	}
+	m.ConsensusIsLeader.WithLabelValues(node).Set(v)
+}
+
+// ObserveConsensusAuthorityRej records rejection reason.
+func (m *Registry) ObserveConsensusAuthorityRej(reason string) {
+	if m == nil {
+		return
+	}
+	m.ConsensusAuthorityRej.WithLabelValues(reason).Inc()
 }
 
 // ObserveFailover records a failover attempt outcome.
