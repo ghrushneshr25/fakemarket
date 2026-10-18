@@ -121,12 +121,8 @@ func TestP96_FileTransport_Partition_BC_Elects(t *testing.T) {
 		t.Fatal("B must advance WAL")
 	}
 
-	// Heal: A observes higher term via shared auth reload
+	// Heal: A must not regain authority without a new election
 	_ = ft.Heal()
-	if err := nodes["A"].AuthorizeCommand(); err == nil {
-		// A not leader — still reject
-	}
-	// A PollFile may get heartbeats from B after heal
 	for i := 0; i < 10; i++ {
 		nodes["B"].Tick()
 		for _, id := range members {
@@ -137,7 +133,7 @@ func TestP96_FileTransport_Partition_BC_Elects(t *testing.T) {
 		t.Fatal("A must not regain leadership without election")
 	}
 	if err := nodes["A"].AuthorizeCommand(); err == nil {
-		t.Fatal("A still must not authorize")
+		t.Fatal("A still must not authorize after heal")
 	}
 	writers := 0
 	for _, id := range members {
