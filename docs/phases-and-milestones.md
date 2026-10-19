@@ -1315,7 +1315,7 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 | P10.2 | Production observability | 🟢 ACCEPTED / CLOSED (`467ac24`) |
 | P10.3 | Trading simulator | 🟢 ACCEPTED / CLOSED (`b757ab0`) |
 | P10.4 | E2E failure + recovery demo | 🟢 ACCEPTED / CLOSED (`884f63a`) |
-| P10.5 | Final CTO / production readiness | 📋 EVIDENCE PACKAGE (`docs/reviews/P10.5-FINAL-CTO-READINESS.md`) — CTO decision pending |
+| P10.5 | Final CTO / production readiness | 🟢 ACCEPTED / CLOSED — **PRODUCTION READY WITHIN DEFINED SCOPE** |
 
 **P10 goal:** demonstrability and operational maturity — not new distributed-system architecture.
 
@@ -1570,4 +1570,4 @@ Next:   P7 Performance & Observability (metrics → benches → evidence-based o
 3. **CTO REQUEST CHANGES:** keep 🔧; note blockers under the milestone.  
 4. **Do not** rewrite history of requirements — append “Updated in Mx.y” if semantics change.  
 
-**Last updated:** 2026-10-20 — P10.5 evidence package filed; awaiting final CTO readiness decision.
+**Last updated:** 2026-10-20 — **P0–P10 COMPLETE.** P10.5 🟢 PRODUCTION READY — WITHIN DEFINED SCOPE. Core architecture FROZEN.
