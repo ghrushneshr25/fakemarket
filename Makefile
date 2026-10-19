@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet run check clean help proto e2e bench bench-scale profile profile-full docker-build docker-up docker-down docker-logs sim
+.PHONY: build test lint fmt vet run check clean help proto e2e bench bench-scale profile profile-full docker-build docker-up docker-down docker-logs sim demo-p104
 APP_NAME := fakemarket
 CMD_PATH := ./cmd/fakemarket
 BIN_DIR  := bin
@@ -83,6 +83,10 @@ sim:
 ## sim-quick: short deterministic check (fingerprint + trades + P8.6)
 sim-quick:
 	$(GO) run ./cmd/fakemarket-sim -seed 42 -scenario normal -commands 400 -rate 2000 -clients 4 -instruments 8
+
+## demo-p104: P10.4 failure/recovery demo (real P9 paths; not Compose HTTP kill)
+demo-p104:
+	$(GO) run ./cmd/fakemarket-demo -seed 42 -pre 120 -post 80 -instruments 8 -accounts 50
 
 ## bench: P7.4 short reproducible benches (not part of check duration)
 bench:
