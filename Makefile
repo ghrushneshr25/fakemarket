@@ -84,9 +84,9 @@ sim:
 sim-quick:
 	$(GO) run ./cmd/fakemarket-sim -seed 42 -scenario normal -commands 400 -rate 2000 -clients 4 -instruments 8
 
-## demo-p104: P10.4 failure/recovery demo (real P9 paths; not Compose HTTP kill)
+## demo-p104: P10.4 failure/recovery demo (F1+F2+F3 real OS kill)
 demo-p104:
-	$(GO) run ./cmd/fakemarket-demo -seed 42 -pre 120 -post 80 -instruments 8 -accounts 50
+	$(GO) run ./cmd/fakemarket-demo -seed 42 -pre 120 -post 80 -instruments 8 -accounts 50 -f1 -f2 -f3
 
 ## bench: P7.4 short reproducible benches (not part of check duration)
 bench:

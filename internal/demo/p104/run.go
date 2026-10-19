@@ -20,7 +20,8 @@ func Run(cfg Config) (Report, error) {
 			"Compose node-a/b/c are HTTP packaging only (P10.1) — they do not run trading or consensus",
 			"F1 uses real P9.6 FileTransport + SharedAuthority + TradingService AuthorityGate in-process",
 			"F2 uses real P9.5 DetectFailure → Promote (fence-before-write) + replica CatchUp",
-			"Financial history in F1 is single-process WAL (authority moves; financial log is not multi-master)",
+			"F3 uses real OS SIGKILL of primary process holding authority+trading+WAL; survivor recovers via StartupRecover/OpenResumed",
+			"F3 live books start empty after resume (sequence continuous; resting book is recovery-oracle, not hot-loaded matcher)",
 			"TCP gRPC to Compose nodes is not wired; demo drives Service path with P10.3 command generator",
 		},
 	}
@@ -71,6 +72,18 @@ func Run(cfg Config) (Report, error) {
 		if err != nil {
 			rep.OK = false
 			rep.Error = "F2: " + err.Error()
+			rep.Timeline = allTL
+			printReport(rep)
+			return rep, err
+		}
+	}
+	if cfg.RunF3 {
+		f3, tl, err := RunF3(cfg, m)
+		allTL = append(allTL, tl...)
+		rep.F3 = f3
+		if err != nil {
+			rep.OK = false
+			rep.Error = "F3: " + err.Error()
 			rep.Timeline = allTL
 			printReport(rep)
 			return rep, err

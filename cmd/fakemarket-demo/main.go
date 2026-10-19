@@ -10,6 +10,10 @@ import (
 )
 
 func main() {
+	// Real OS-process primary child (spawned by F3).
+	if os.Getenv(p104.EnvChildPrimary) == "1" {
+		os.Exit(p104.RunPrimaryChild())
+	}
 	os.Exit(run())
 }
 
@@ -24,6 +28,7 @@ func run() int {
 	metrics := flag.String("metrics-addr", "", "optional :9101 metrics")
 	f1 := flag.Bool("f1", true, "run F1 partition scenario")
 	f2 := flag.Bool("f2", true, "run F2 promote scenario")
+	f3 := flag.Bool("f3", true, "run F3 real OS process kill")
 	flag.Parse()
 
 	cfg.Seed = *seed
@@ -35,6 +40,7 @@ func run() int {
 	cfg.MetricsAddr = *metrics
 	cfg.RunF1 = *f1
 	cfg.RunF2 = *f2
+	cfg.RunF3 = *f3
 
 	rep, err := p104.Run(cfg)
 	if err != nil {

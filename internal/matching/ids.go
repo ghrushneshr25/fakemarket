@@ -43,6 +43,16 @@ type CounterIDs struct {
 
 func NewCounterIDs() *CounterIDs { return &CounterIDs{} }
 
+// Seed sets the last issued counters so Next* continues after recovery (n already used).
+func (c *CounterIDs) Seed(lastTrade, lastExec int64) {
+	if lastTrade > 0 {
+		c.trade.Store(lastTrade)
+	}
+	if lastExec > 0 {
+		c.exec.Store(lastExec)
+	}
+}
+
 func (c *CounterIDs) NextTradeID() domain.TradeID {
 	n := c.trade.Add(1)
 	return domain.TradeID("TRD-" + strconv.FormatInt(n, 10))
@@ -57,6 +67,13 @@ func (c *CounterIDs) NextExecutionID() domain.ExecutionID {
 type CounterSeq struct{ n atomic.Uint64 }
 
 func NewCounterSeq() *CounterSeq { return &CounterSeq{} }
+
+// Seed sets the last issued sequence so Next continues after recovery.
+func (s *CounterSeq) Seed(last uint64) {
+	if last > 0 {
+		s.n.Store(last)
+	}
+}
 
 func (s *CounterSeq) Next() domain.Sequence {
 	n := s.n.Add(1)

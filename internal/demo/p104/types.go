@@ -19,9 +19,10 @@ type Config struct {
 	Accounts     int
 	RatePerSec   float64
 	MetricsAddr  string
-	// Scenario selects F1 (partition) and/or F2 (promote).
+	// Scenario selects F1/F2/F3.
 	RunF1 bool
 	RunF2 bool
+	RunF3 bool // real OS process SIGKILL of primary
 }
 
 // Defaults matches CTO recommended shape (short for automated runs).
@@ -29,7 +30,7 @@ func Defaults() Config {
 	return Config{
 		Seed: 42, PreCommands: 120, PostCommands: 80,
 		Clients: 4, Instruments: 8, Accounts: 50, RatePerSec: 200,
-		RunF1: true, RunF2: true,
+		RunF1: true, RunF2: true, RunF3: true,
 	}
 }
 
@@ -64,10 +65,9 @@ type Report struct {
 	Timeline []TimelineEvent
 	Start    time.Time
 
-	// F1 fields
 	F1 PrePost
-	// F2 fields
 	F2 PrePost
+	F3 PrePost
 
 	MDEventsBefore, MDEventsAfter int64
 	MetricsNotes                  string

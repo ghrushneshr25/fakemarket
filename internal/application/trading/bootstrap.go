@@ -11,6 +11,7 @@ import (
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/matching"
 	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
+	"github.com/ghrushneshr25/fakemarket/internal/recovery"
 	"github.com/ghrushneshr25/fakemarket/internal/wal"
 )
 
@@ -265,6 +266,175 @@ func BootstrapWorkers(
 		WALDir: walDir, Accounts: accounts, Instruments: instruments,
 		NumShards: numShards, NumWorkers: numWorkers,
 	})
+}
+
+// BootstrapResume recovers an existing WAL (StartupRecover + OpenResumed) and
+// wires a command-ready stack whose next Event.Sequence continues at Last+1.
+//
+// Accounts should be the same seed used when the WAL was written (recovery folds
+// into a clone). Live books start empty — resting liquidity is not hot-loaded;
+// new commands after resume are valid and sequence-continuous. Full book rebuild
+// remains the recovery.State oracle path (P8.6), not the live matcher.
+func BootstrapResume(cfg BootstrapConfig) (*BootstrapResult, *recovery.StartupResult, error) {
+	if len(cfg.Instruments) == 0 {
+		return nil, nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
+	}
+	if cfg.WALDir == "" {
+		return nil, nil, fmt.Errorf("%w: empty wal dir", ErrInvalidCommand)
+	}
+	nShards := cfg.NumShards
+	if nShards <= 0 {
+		nShards = 1
+	}
+	if cfg.NumWorkers < 0 {
+		return nil, nil, fmt.Errorf("%w: num_workers must be >= 0 (got %d)", ErrInvalidCommand, cfg.NumWorkers)
+	}
+
+	ireg := domain.NewInstrumentRegistry()
+	for _, in := range cfg.Instruments {
+		_ = ireg.Register(in)
+	}
+	mreg := metrics.New()
+	gcMax, gcWait := 32, 100*time.Microsecond
+	switch os.Getenv("WAL_GROUP_COMMIT") {
+	case "0", "off", "1", "legacy":
+		gcMax, gcWait = 1, 0
+	}
+	wcfg := wal.Config{
+		Dir: cfg.WALDir, SyncOnAppend: true,
+		GroupCommitMax: gcMax, GroupCommitWait: gcWait,
+		OnAppend: func(ok bool, n int, d time.Duration) { mreg.ObserveWAL(ok, n, d) },
+	}
+	if cfg.Hooks != nil {
+		wcfg.OpenFile = cfg.Hooks.OpenFile
+		wcfg.OnFault = cfg.Hooks.OnFault
+	}
+
+	sr, w, err := recovery.CompleteStartup(recovery.StartupConfig{
+		WALDir: cfg.WALDir, Mode: recovery.ModeStrict,
+		Instruments: ireg, Accounts: cfg.Accounts,
+	}, wcfg)
+	if err != nil {
+		return nil, sr, err
+	}
+
+	var eventSeq atomic.Uint64
+	eventSeq.Store(uint64(sr.Recovery.LastSequence))
+	var orderIDs atomic.Uint64
+	var orderSeq atomic.Uint64
+	// Continue IDs past recovered maxima when available.
+	if st := sr.Recovery.State; st != nil {
+		var maxOID, maxOSeq, maxTSeq uint64
+		for _, o := range st.Orders {
+			if u := parseTrailingUint(string(o.ID)); u > maxOID {
+				maxOID = u
+			}
+			if uint64(o.Sequence) > maxOSeq {
+				maxOSeq = uint64(o.Sequence)
+			}
+		}
+		for _, tr := range st.Trades {
+			if uint64(tr.Sequence) > maxTSeq {
+				maxTSeq = uint64(tr.Sequence)
+			}
+		}
+		orderIDs.Store(maxOID)
+		orderSeq.Store(maxOSeq)
+		_ = maxTSeq
+	}
+	var journalMu sync.Mutex
+	tradeIDs := matching.NewCounterIDs()
+	tradeSeq := matching.NewCounterSeq()
+	if st := sr.Recovery.State; st != nil {
+		var maxTSeq, maxTradeN, maxExecN int64
+		for _, tr := range st.Trades {
+			if int64(tr.Sequence) > maxTSeq {
+				maxTSeq = int64(tr.Sequence)
+			}
+			if n := int64(parseTrailingUint(string(tr.ID))); n > maxTradeN {
+				maxTradeN = n
+			}
+		}
+		for _, ex := range st.Executions {
+			if n := int64(parseTrailingUint(string(ex.ID))); n > maxExecN {
+				maxExecN = n
+			}
+		}
+		tradeIDs.Seed(maxTradeN, maxExecN)
+		tradeSeq.Seed(uint64(maxTSeq))
+	}
+
+	// Prefer recovered account cash/positions when present.
+	accts := cfg.Accounts
+	if st := sr.Recovery.State; st != nil && len(st.Accounts) > 0 {
+		accts = st.Accounts
+	}
+	reg := NewAccountRegistry(accts)
+	resStore := domain.NewReservationStore()
+	if st := sr.Recovery.State; st != nil && st.Reservations != nil {
+		resStore = st.Reservations
+	}
+	log := slog.Default()
+	router := NewRouter()
+	if err := router.ConfigureShards(nShards); err != nil {
+		_ = w.Close()
+		return nil, sr, err
+	}
+	svc := NewService(router).WithMetrics(mreg).WithLogger(log)
+	onFault := func() { svc.SetReady(false) }
+	for _, inst := range cfg.Instruments {
+		deps := ExecutorDeps{
+			Instrument: inst, Accounts: reg, WAL: w, EventSeq: &eventSeq,
+			JournalMu: &journalMu, Res: resStore, OrderIDs: &orderIDs, OrderSeq: &orderSeq,
+			TradeIDs: tradeIDs, TradeSeq: tradeSeq,
+			Clock:            func() time.Time { return time.Now().UTC() },
+			OnDurableFailure: onFault, Metrics: mreg, Logger: log,
+		}
+		if cfg.Probes != nil {
+			deps.Probe = cfg.Probes[inst.ID]
+		}
+		ex, err := NewInstrumentExecutor(deps)
+		if err != nil {
+			_ = w.Close()
+			return nil, sr, err
+		}
+		router.Register(ex)
+	}
+	var pool *WorkerPool
+	nWorkers := cfg.NumWorkers
+	if nWorkers > 0 {
+		pool, err = NewWorkerPool(router, WorkerPoolConfig{
+			NumWorkers: nWorkers, QueueCap: cfg.WorkerQueueCap,
+		}, mreg)
+		if err != nil {
+			_ = w.Close()
+			return nil, sr, err
+		}
+		if err := pool.Attach(); err != nil {
+			_ = w.Close()
+			return nil, sr, err
+		}
+		pool.Start()
+		router.SetWorkerPool(pool)
+	}
+	svc.SetReady(true)
+	rm := &ReadModel{Accounts: reg, Res: resStore, Router: router, EventSeq: &eventSeq}
+	return &BootstrapResult{
+		Service: svc, WAL: w, Read: rm, Accounts: reg, Res: resStore, Metrics: mreg, Logger: log,
+		Router: router, NumShards: nShards, NumWorkers: nWorkers, Pool: pool,
+	}, sr, nil
+}
+
+func parseTrailingUint(s string) uint64 {
+	var n uint64
+	i := len(s) - 1
+	for i >= 0 && s[i] >= '0' && s[i] <= '9' {
+		i--
+	}
+	for _, c := range s[i+1:] {
+		n = n*10 + uint64(c-'0')
+	}
+	return n
 }
 
 // MustInstrument builds a simple INR instrument for tests.

@@ -23,6 +23,9 @@ func printReport(r Report) {
 	if r.Config.RunF2 {
 		printScenario(r.F2)
 	}
+	if r.Config.RunF3 {
+		printScenario(r.F3)
+	}
 	fmt.Println("--- timeline ---")
 	for _, e := range r.Timeline {
 		fmt.Printf("T+%s  %s\n", e.T, e.Message)
