@@ -76,6 +76,17 @@ func (r *Router) ShardOf(id domain.InstrumentID) (ShardID, bool) {
 	return 0, false
 }
 
+// Executors returns a snapshot of all registered instrument executors.
+func (r *Router) Executors() []*InstrumentExecutor {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*InstrumentExecutor, 0, len(r.byInst))
+	for _, e := range r.byInst {
+		out = append(out, e)
+	}
+	return out
+}
+
 // SetMarketDataSink attaches the same post-durable MD sink to every executor.
 func (r *Router) SetMarketDataSink(s MarketDataSink) {
 	r.mu.RLock()

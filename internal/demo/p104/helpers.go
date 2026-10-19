@@ -166,17 +166,6 @@ func finEqual(a, b FinSnap) bool {
 }
 
 func verifyP86(walDir string, insts []domain.Instrument, seed map[domain.AccountID]*domain.Account, base invariants.Baseline) (ok bool, detail string, eventSeq, tradeMax uint64, orders, trades int) {
-	return verifyP86Mode(walDir, insts, seed, base, true)
-}
-
-// verifyP86Financial is full recovery + conservation + cash/position checks.
-// Used after cold-book resume where live matcher did not rebuild resting book
-// (full book.no_cross may fail until hot book rebuild exists).
-func verifyP86Financial(walDir string, insts []domain.Instrument, seed map[domain.AccountID]*domain.Account, base invariants.Baseline) (ok bool, detail string, eventSeq, tradeMax uint64, orders, trades int) {
-	return verifyP86Mode(walDir, insts, seed, base, false)
-}
-
-func verifyP86Mode(walDir string, insts []domain.Instrument, seed map[domain.AccountID]*domain.Account, base invariants.Baseline, fullStructural bool) (ok bool, detail string, eventSeq, tradeMax uint64, orders, trades int) {
 	ireg := domain.NewInstrumentRegistry()
 	for _, in := range insts {
 		_ = ireg.Register(in)
@@ -196,21 +185,8 @@ func verifyP86Mode(walDir string, insts []domain.Instrument, seed map[domain.Acc
 			tradeMax = uint64(tr.Sequence)
 		}
 	}
-	if fullStructural {
-		if err := invariants.VerifyStateWithBaseline(base, st); err != nil {
-			return false, err.Error(), eventSeq, tradeMax, orders, trades
-		}
-		detail = "VerifyStateWithBaseline PASS (×2 recovery stable)"
-	} else {
-		if err := invariants.VerifyConservation(base, st); err != nil {
-			return false, err.Error(), eventSeq, tradeMax, orders, trades
-		}
-		for _, a := range st.Accounts {
-			if a != nil && a.Cash() < 0 {
-				return false, "negative cash", eventSeq, tradeMax, orders, trades
-			}
-		}
-		detail = "VerifyConservation PASS (cold-resume; full structural book check deferred)"
+	if err := invariants.VerifyStateWithBaseline(base, st); err != nil {
+		return false, err.Error(), eventSeq, tradeMax, orders, trades
 	}
 	rr2, err := recovery.RecoverDir(recovery.Config{
 		Mode: recovery.ModeStrict, Instruments: ireg, Accounts: cloneAccounts(seed), WALDir: walDir,
@@ -218,7 +194,7 @@ func verifyP86Mode(walDir string, insts []domain.Instrument, seed map[domain.Acc
 	if err != nil || rr2.State.LastEventSequence != st.LastEventSequence || len(rr2.State.Trades) != len(st.Trades) {
 		return false, "second recovery drift", eventSeq, tradeMax, orders, trades
 	}
-	return true, detail, eventSeq, tradeMax, orders, trades
+	return true, "VerifyStateWithBaseline PASS (×2 recovery stable)", eventSeq, tradeMax, orders, trades
 }
 
 func checkpoint(label, authority string, term uint64, boot *trading.BootstrapResult, walDir string, insts []domain.Instrument, seed map[domain.AccountID]*domain.Account, base invariants.Baseline, writers int) Checkpoint {

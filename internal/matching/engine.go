@@ -76,6 +76,66 @@ func NewEngineWith(opts EngineOpts) (*Engine, error) {
 // Book returns the live order book.
 func (e *Engine) Book() *book.OrderBook { return e.book }
 
+// RestOrder places an already-lifecycle-correct resting/partial order on the live
+// book without matching. Used after WAL recovery to hot-load liquidity.
+// o must already be RESTING or PARTIALLY_FILLED with remaining > 0 and LIMIT type.
+func (e *Engine) RestOrder(o *domain.Order) error {
+	if e == nil || o == nil {
+		return fmt.Errorf("%w: nil engine/order", ErrInvalidReplay)
+	}
+	if o.InstrumentID != e.instrument {
+		return fmt.Errorf("%w: instrument mismatch", ErrInvalidReplay)
+	}
+	if _, ok := e.orders[o.ID]; ok {
+		return fmt.Errorf("%w: duplicate order %s", ErrInvalidReplay, o.ID)
+	}
+	if err := e.book.Add(o); err != nil {
+		return err
+	}
+	e.orders[o.ID] = o
+	return nil
+}
+
+// LoadBookFrom copies resting orders from src into this engine in FIFO price-time order.
+// Does not re-match. Same *domain.Order pointers are registered (src should be treated read-only).
+func (e *Engine) LoadBookFrom(src *book.OrderBook) error {
+	if e == nil || src == nil {
+		return fmt.Errorf("%w: nil engine/book", ErrInvalidReplay)
+	}
+	if src.InstrumentID() != e.instrument {
+		return fmt.Errorf("%w: instrument mismatch", ErrInvalidReplay)
+	}
+	loadSide := func(prices []domain.Price, getLevel func(domain.Price) (*book.PriceLevel, bool)) error {
+		for _, px := range prices {
+			lvl, ok := getLevel(px)
+			if !ok || lvl == nil {
+				continue
+			}
+			for _, oid := range lvl.OrderIDs() {
+				o, ok := lvl.Get(oid)
+				if !ok || o == nil {
+					o2, err := src.GetOrder(oid)
+					if err != nil || o2 == nil {
+						return fmt.Errorf("%w: missing order %s", ErrInvalidReplay, oid)
+					}
+					o = o2
+				}
+				if err := e.RestOrder(o); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := loadSide(src.Bids().Prices(), src.Bids().GetLevel); err != nil {
+		return err
+	}
+	if err := loadSide(src.Asks().Prices(), src.Asks().GetLevel); err != nil {
+		return err
+	}
+	return e.book.Validate()
+}
+
 // Orders returns live order pointers (for application/journal layers).
 func (e *Engine) Orders() []*domain.Order {
 	out := make([]*domain.Order, 0, len(e.orders))

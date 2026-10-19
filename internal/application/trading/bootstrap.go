@@ -272,9 +272,8 @@ func BootstrapWorkers(
 // wires a command-ready stack whose next Event.Sequence continues at Last+1.
 //
 // Accounts should be the same seed used when the WAL was written (recovery folds
-// into a clone). Live books start empty — resting liquidity is not hot-loaded;
-// new commands after resume are valid and sequence-continuous. Full book rebuild
-// remains the recovery.State oracle path (P8.6), not the live matcher.
+// into a clone). Resting books are hot-loaded from recovery.State.Books into live
+// matchers before Ready (FIFO price-time; no re-match of historical commands).
 func BootstrapResume(cfg BootstrapConfig) (*BootstrapResult, *recovery.StartupResult, error) {
 	if len(cfg.Instruments) == 0 {
 		return nil, nil, fmt.Errorf("%w: no instruments", ErrInvalidCommand)
@@ -417,6 +416,26 @@ func BootstrapResume(cfg BootstrapConfig) (*BootstrapResult, *recovery.StartupRe
 		pool.Start()
 		router.SetWorkerPool(pool)
 	}
+	// Hot-load recovered resting books BEFORE Ready (must not accept cmds on empty books).
+	if st := sr.Recovery.State; st != nil {
+		for _, ex := range router.Executors() {
+			if ex == nil {
+				continue
+			}
+			ob := st.Books[ex.InstrumentID()]
+			if ob == nil {
+				continue
+			}
+			if err := ex.LoadRestingBook(ob); err != nil {
+				_ = w.Close()
+				if pool != nil {
+					pool.Stop()
+				}
+				return nil, sr, fmt.Errorf("hot-load book %s: %w", ex.InstrumentID(), err)
+			}
+		}
+	}
+
 	svc.SetReady(true)
 	rm := &ReadModel{Accounts: reg, Res: resStore, Router: router, EventSeq: &eventSeq}
 	return &BootstrapResult{

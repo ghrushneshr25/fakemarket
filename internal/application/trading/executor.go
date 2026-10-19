@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ghrushneshr25/fakemarket/internal/book"
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/matching"
 	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
@@ -167,11 +168,36 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 	}, nil
 }
 
+// InstrumentID returns the instrument this executor owns.
+func (x *InstrumentExecutor) InstrumentID() domain.InstrumentID {
+	return x.instrument.ID
+}
+
 // SetMarketDataSink attaches or replaces the post-durable MD sink (nil disables).
 func (x *InstrumentExecutor) SetMarketDataSink(s MarketDataSink) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	x.md = s
+}
+
+// LoadRestingBook installs recovered resting liquidity into the live matcher
+// without re-matching. Must run before Ready after crash resume.
+// src is the recovered book for this instrument (FIFO price-time order).
+func (x *InstrumentExecutor) LoadRestingBook(src *book.OrderBook) error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if src == nil {
+		return nil
+	}
+	if err := x.engine.LoadBookFrom(src); err != nil {
+		return err
+	}
+	for _, o := range x.engine.Orders() {
+		if o != nil {
+			x.orderAccount[o.ID] = o.AccountID
+		}
+	}
+	return nil
 }
 
 func (x *InstrumentExecutor) observePhase(phase, op string, start time.Time) {

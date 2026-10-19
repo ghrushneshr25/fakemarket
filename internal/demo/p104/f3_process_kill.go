@@ -396,22 +396,21 @@ func RunF3(cfg Config, m *metrics.Registry) (PrePost, []TimelineEvent, error) {
 		return out, tl, fmt.Errorf("resume failed")
 	}
 
-	// Full structural P8.6 at kill boundary (mid). After cold-book resume, financial
-	// conservation + dual recovery; live resting book is not hot-loaded from WAL.
-	okPost, detailPost, esPost, tmPost, ordsPost, trsPost := verifyP86Financial(walDir, insts, seed, base)
+	// Hot-book resume: full structural P8.6 after crash + resume traffic.
+	okPost, detailPost, esPost, tmPost, ordsPost, trsPost := verifyP86(walDir, insts, seed, base)
 	out.Post = Checkpoint{
 		Label: "post-resume-after-kill", Authority: "B", Term: out.NewTerm,
 		EventSeq: esPost, TradeSeqMax: tmPost, Orders: ordsPost, Trades: trsPost,
 		P86OK: okPost, P86Err: detailPost, Writers: 1,
 	}
 	if !out.Post.P86OK {
-		return out, tl, fmt.Errorf("post P8.6 financial: %s", out.Post.P86Err)
+		return out, tl, fmt.Errorf("post P8.6: %s", out.Post.P86Err)
 	}
 	if out.Post.EventSeq <= out.Pre.EventSeq {
 		return out, tl, fmt.Errorf("sequence regression")
 	}
-	logf(&tl, start, "post-resume financial P8.6=PASS Event.Seq=%d Trade.Seq=%d (%s)",
-		out.Post.EventSeq, out.Post.TradeSeqMax, detailPost)
+	logf(&tl, start, "post-resume P8.6=PASS (hot book) Event.Seq=%d Trade.Seq=%d",
+		out.Post.EventSeq, out.Post.TradeSeqMax)
 
 	// Restart old A process: try to become leader locally but SharedAuth says B
 	logf(&tl, start, "restarting old A process (heal attempt)")
