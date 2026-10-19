@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet run check clean help proto e2e bench bench-scale profile profile-full docker-build docker-up docker-down docker-logs
+.PHONY: build test lint fmt vet run check clean help proto e2e bench bench-scale profile profile-full docker-build docker-up docker-down docker-logs sim
 APP_NAME := fakemarket
 CMD_PATH := ./cmd/fakemarket
 BIN_DIR  := bin
@@ -75,6 +75,10 @@ docker-down:
 ## docker-logs: follow node logs
 docker-logs:
 	docker compose logs -f node-a node-b node-c
+
+## sim: P10.3 deterministic trading simulator (demo workload, not P7 bench)
+sim:
+	$(GO) run ./cmd/fakemarket-sim -seed 42 -scenario normal -commands 800 -rate 400
 
 ## bench: P7.4 short reproducible benches (not part of check duration)
 bench:
