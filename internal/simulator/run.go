@@ -15,9 +15,11 @@ import (
 	"time"
 
 	fakemarketv1 "github.com/ghrushneshr25/fakemarket/api/gen/fakemarket/v1"
+	"github.com/ghrushneshr25/fakemarket/internal/application/marketdata"
 	"github.com/ghrushneshr25/fakemarket/internal/application/trading"
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
 	"github.com/ghrushneshr25/fakemarket/internal/invariants"
+	mdevent "github.com/ghrushneshr25/fakemarket/internal/marketdata/event"
 	"github.com/ghrushneshr25/fakemarket/internal/observability/metrics"
 	"github.com/ghrushneshr25/fakemarket/internal/recovery"
 	grpcapi "github.com/ghrushneshr25/fakemarket/internal/transport/grpc"
@@ -50,6 +52,9 @@ type Stats struct {
 	MetricsBefore, MetricsAfter map[string]float64
 	// PartialFillExample is one recovered partial-fill lifecycle (if any).
 	PartialFillExample string
+	// MD events / sequence from live publisher (not WAL).
+	MDEventsPublished int64
+	MDSequenceMax     uint64
 }
 
 // Result is the outcome of a run.
@@ -97,6 +102,15 @@ func Run(cfg Config) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+
+	// Live MD publisher: post-durable Trade/BookDelta/BestQuote → Hub (no WS clients required).
+	mdHub := marketdata.NewHub(instIDs, marketdata.DefaultClientQueue).WithMetrics(boot.Metrics)
+	mdAlloc := mdevent.NewAllocator()
+	mdLive := marketdata.NewLivePublisher(mdHub, mdAlloc)
+	if boot.Router != nil {
+		boot.Router.SetMarketDataSink(mdLive)
+	}
+	fmt.Println("market_data:            live publisher → Hub (Trade/BookDelta/BestQuote); WS clients not required")
 
 	// Optional Prometheus scrape endpoint (exchange registry — sim emits nothing of its own).
 	var metricsSrv *http.Server
@@ -230,6 +244,14 @@ loop:
 	if res.Stats.Duration > 0 {
 		res.Stats.ObservedCmdPerSec = float64(res.Stats.Submitted) / res.Stats.Duration.Seconds()
 		res.Stats.ObservedTradePerSec = float64(res.Stats.TradesExecuted) / res.Stats.Duration.Seconds()
+	}
+	if mdHub != nil {
+		res.Stats.MDEventsPublished = mdHub.Metrics.EventsPublished.Load()
+	}
+	for _, id := range instIDs {
+		if u := uint64(mdAlloc.LastIssued(id)); u > res.Stats.MDSequenceMax {
+			res.Stats.MDSequenceMax = u
+		}
 	}
 
 	printSummary(res)
@@ -401,6 +423,14 @@ func printSummary(res Result) {
 		fmt.Printf("Partial-fill example: %s\n", s.PartialFillExample)
 	}
 	fmt.Println()
+	fmt.Println("--- market data (live publisher) ---")
+	fmt.Printf("MD events published:  %d  (Hub.Publish count)\n", s.MDEventsPublished)
+	fmt.Printf("MDSequence max:       %d  (per-instrument allocator)\n", s.MDSequenceMax)
+	if s.MetricsAfter != nil {
+		fmt.Printf("MD metrics events:    %.0f  (fakemarket_marketdata_events_total)\n",
+			s.MetricsAfter["fakemarket_marketdata_events_total"])
+	}
+	fmt.Println()
 	fmt.Printf("Workload fingerprint: %s\n", s.Fingerprint)
 	fmt.Printf("Observed cmd/sec:     %.1f  (demo rate)\n", s.ObservedCmdPerSec)
 	fmt.Printf("Observed trade/sec:   %.1f  (demo rate; TradesExecuted)\n", s.ObservedTradePerSec)
@@ -436,6 +466,7 @@ func printMetricDelta(before, after map[string]float64) {
 		"fakemarket_wal_appends_total",
 		"fakemarket_wal_bytes_written_total",
 		"fakemarket_marketdata_events_total",
+		"fakemarket_marketdata_publish_duration_seconds_count",
 		"fakemarket_trading_command_duration_seconds_count",
 		"fakemarket_grpc_server_rpc_duration_seconds_count",
 	}

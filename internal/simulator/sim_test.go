@@ -84,6 +84,15 @@ func TestP103_Run_AuthoritativeTrades_And_P86(t *testing.T) {
 	if res.Stats.MetricsAfter["fakemarket_trades_total"] < 1 {
 		t.Fatal("trades_total metric not increased")
 	}
+	if res.Stats.MDEventsPublished < 1 {
+		t.Fatal("MD events not published")
+	}
+	if res.Stats.MDSequenceMax < 1 {
+		t.Fatal("MDSequence not advanced")
+	}
+	if res.Stats.MetricsAfter["fakemarket_marketdata_events_total"] < 1 {
+		t.Fatal("marketdata_events_total not increased")
+	}
 	// two-run fingerprint + identical stream identity
 	cfg2 := cfg
 	cfg2.WALDir = t.TempDir()

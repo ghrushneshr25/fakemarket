@@ -76,6 +76,21 @@ func (r *Router) ShardOf(id domain.InstrumentID) (ShardID, bool) {
 	return 0, false
 }
 
+// SetMarketDataSink attaches the same post-durable MD sink to every executor.
+func (r *Router) SetMarketDataSink(s MarketDataSink) {
+	r.mu.RLock()
+	exs := make([]*InstrumentExecutor, 0, len(r.byInst))
+	for _, ex := range r.byInst {
+		exs = append(exs, ex)
+	}
+	r.mu.RUnlock()
+	for _, ex := range exs {
+		if ex != nil {
+			ex.SetMarketDataSink(s)
+		}
+	}
+}
+
 // Register adds an instrument execution context and assigns it to its deterministic shard.
 func (r *Router) Register(ex *InstrumentExecutor) {
 	r.mu.Lock()

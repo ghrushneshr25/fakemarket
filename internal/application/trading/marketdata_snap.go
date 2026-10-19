@@ -211,6 +211,10 @@ func (x *InstrumentExecutor) snapshotRecoveryBook() RecoveryBookSnap {
 func (x *InstrumentExecutor) snapshotQuote() (QuoteSnap, error) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
+	return x.snapshotQuoteLocked(), nil
+}
+
+func (x *InstrumentExecutor) snapshotQuoteLocked() QuoteSnap {
 	ob := x.engine.Book()
 	out := QuoteSnap{InstrumentID: x.instrument.ID}
 	if bb, ok := ob.BestBid(); ok {
@@ -225,7 +229,7 @@ func (x *InstrumentExecutor) snapshotQuote() (QuoteSnap, error) {
 		sp := out.Ask.Price - out.Bid.Price
 		out.Spread = &sp
 	}
-	return out, nil
+	return out
 }
 
 func (x *InstrumentExecutor) listPublicTrades(limit int) []PublicTradeSnap {

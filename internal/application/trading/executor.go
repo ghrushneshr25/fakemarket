@@ -50,6 +50,7 @@ type InstrumentExecutor struct {
 	probe        ConcurrencyProbe
 	metrics      *metrics.Registry
 	log          *slog.Logger
+	md           MarketDataSink // optional post-durable MD projection
 }
 
 // ConcurrencyProbe is optional observation of the per-instrument critical section.
@@ -100,6 +101,7 @@ type ExecutorDeps struct {
 	Probe            ConcurrencyProbe
 	Metrics          *metrics.Registry // optional P7.2 phase timers
 	Logger           *slog.Logger      // optional lifecycle / durable-fail logs
+	MarketData       MarketDataSink    // optional post-durable MD projection
 }
 
 // NewInstrumentExecutor constructs a single-instrument execution context.
@@ -161,7 +163,15 @@ func NewInstrumentExecutor(d ExecutorDeps) (*InstrumentExecutor, error) {
 		probe:        d.Probe,
 		metrics:      d.Metrics,
 		log:          d.Logger,
+		md:           d.MarketData,
 	}, nil
+}
+
+// SetMarketDataSink attaches or replaces the post-durable MD sink (nil disables).
+func (x *InstrumentExecutor) SetMarketDataSink(s MarketDataSink) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.md = s
 }
 
 func (x *InstrumentExecutor) observePhase(phase, op string, start time.Time) {
@@ -325,7 +335,8 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 	ts := x.clock()
 	// One WAL record (CommandBatch) = all-or-nothing durability for the command.
 	jStart := time.Now()
-	tradeN := x.engine.TradeCount() - x.tradeCursor
+	tradeFrom := x.tradeCursor
+	tradeN := x.engine.TradeCount() - tradeFrom
 	if err := x.commitSubmitBatch(cmd, oid, oseq, resv, live, ts); err != nil {
 		x.observePhase(metrics.PhaseJournal, "submit", jStart)
 		return SubmitOrderResult{}, x.durableFail(err)
@@ -334,6 +345,7 @@ func (x *InstrumentExecutor) Submit(ctx context.Context, cmd SubmitOrderCommand)
 	if tradeN > 0 && x.metrics != nil {
 		x.metrics.TradesTotal.Add(float64(tradeN))
 	}
+	x.publishMDSubmit(tradeFrom, ts)
 
 	return SubmitOrderResult{
 		OrderID: oid, Status: live.Status(), OrderSequence: oseq,
@@ -391,11 +403,38 @@ func (x *InstrumentExecutor) Cancel(ctx context.Context, cmd CancelOrderCommand)
 		return CancelOrderResult{}, x.durableFail(err)
 	}
 	x.observePhase(metrics.PhaseJournal, "cancel", jStart)
+	x.publishMDCancel(ts)
 
 	return CancelOrderResult{
 		OrderID: cmd.OrderID, Status: live.Status(),
 		RemainingQuantity: live.RemainingQuantity(), RequestID: cmd.RequestID,
 	}, nil
+}
+
+// publishMDSubmit projects trades + book after durable submit (caller holds x.mu).
+func (x *InstrumentExecutor) publishMDSubmit(tradeFrom int, ts time.Time) {
+	if x.md == nil {
+		return
+	}
+	var trades []domain.Trade
+	for _, gt := range x.engine.GeneratedTradesFrom(tradeFrom) {
+		trades = append(trades, gt.Trade)
+	}
+	asOf := domain.Sequence(x.eventSeq.Load())
+	quote := x.snapshotQuoteLocked()
+	depth := x.snapshotDepthLocked(5)
+	x.md.OnSubmitCommitted(x.instrument.ID, asOf, ts, trades, quote, depth)
+}
+
+// publishMDCancel projects book after durable cancel (caller holds x.mu).
+func (x *InstrumentExecutor) publishMDCancel(ts time.Time) {
+	if x.md == nil {
+		return
+	}
+	asOf := domain.Sequence(x.eventSeq.Load())
+	quote := x.snapshotQuoteLocked()
+	depth := x.snapshotDepthLocked(5)
+	x.md.OnCancelCommitted(x.instrument.ID, asOf, ts, quote, depth)
 }
 
 func (x *InstrumentExecutor) settleTrade(tr domain.Trade) error {
