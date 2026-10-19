@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/simulator"
 )
@@ -25,7 +24,11 @@ func run() int {
 	clients := flag.Int("clients", cfg.Clients, "concurrent client workers")
 	instruments := flag.Int("instruments", cfg.Instruments, "instrument universe size")
 	accounts := flag.Int("accounts", cfg.Accounts, "account universe size")
-	wal := flag.String("wal", "", "WAL directory (default: temp)")
+	cancelRate := flag.Float64("cancel-rate", -1, "cancel probability (default: scenario)")
+	marketRate := flag.Float64("market-rate", -1, "market order fraction of new orders")
+	aggressiveRate := flag.Float64("aggressive-rate", -1, "aggressive limit fraction")
+	wal := flag.String("wal", "", "WAL directory (default: temp unique)")
+	metricsAddr := flag.String("metrics-addr", "", "if set, serve exchange /metrics /health /ready (e.g. :9100)")
 	flag.Parse()
 
 	cfg.Seed = *seed
@@ -37,18 +40,38 @@ func run() int {
 	cfg.Instruments = *instruments
 	cfg.Accounts = *accounts
 	cfg.WALDir = *wal
+	cfg.MetricsAddr = *metricsAddr
 	cfg.ApplyScenario()
+	// CLI overrides after scenario defaults
+	if *rate != simulator.Defaults().RatePerSec {
+		cfg.RatePerSec = *rate
+	}
+	if *clients != simulator.Defaults().Clients {
+		cfg.Clients = *clients
+	}
+	if *cancelRate >= 0 {
+		cfg.CancelRate = *cancelRate
+	}
+	if *marketRate >= 0 {
+		cfg.MarketRate = *marketRate
+	}
+	if *aggressiveRate >= 0 {
+		cfg.AggressiveRate = *aggressiveRate
+	}
 
 	res, err := simulator.Run(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sim error: %v\n", err)
 		return 1
 	}
-	if res.Stats.Accepted == 0 || res.Stats.Trades == 0 {
+	if res.Stats.Accepted == 0 || res.Stats.TradesExecuted == 0 {
 		fmt.Fprintf(os.Stderr, "sim produced insufficient activity: accepted=%d trades=%d\n",
-			res.Stats.Accepted, res.Stats.Trades)
+			res.Stats.Accepted, res.Stats.TradesExecuted)
 		return 2
 	}
-	_ = time.Second
+	if !res.P86OK {
+		fmt.Fprintf(os.Stderr, "P8.6 FAIL: %v\n", res.P86Err)
+		return 3
+	}
 	return 0
 }

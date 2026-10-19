@@ -1313,7 +1313,7 @@ Reliability gate closed. Follow-up debt: transactional ApplyEvent (not reopened)
 |-----------|--------|--------|
 | P10.1 | Docker / Compose packaging | 🟢 ACCEPTED / CLOSED (`820c5c4` / `c70f4e2`) |
 | P10.2 | Production observability | 🟢 ACCEPTED / CLOSED (`467ac24`) |
-| P10.3 | Trading simulator | 🔧 IMPLEMENTED (CTO review pending) |
+| P10.3 | Trading simulator | 🔧 IMPLEMENTED (CTO re-review — REQUEST CHANGES addressed) |
 | P10.4 | E2E failure + recovery demo | ⏭️ NEXT |
 | P10.5 | Final CTO / production readiness | ⏳ |
 

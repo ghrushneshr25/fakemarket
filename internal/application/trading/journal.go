@@ -79,26 +79,85 @@ func (x *InstrumentExecutor) commitSubmitBatch(
 		}
 	}
 	x.tradeCursor = x.engine.TradeCount()
-	if live.RemainingQuantity() == 0 {
-		if r, ok := x.res.Get(oid); ok {
-			_ = x.res.Release(oid)
-			_ = r
+	// Clear residual capacity on any order fully filled in this batch (live mirrors WAL).
+	for _, id := range ordersTouchedByTrades(oid, newTrades) {
+		o, ok := x.engine.GetOrder(id)
+		if !ok || o.RemainingQuantity() > 0 {
+			continue
+		}
+		if _, ok := x.res.Get(id); ok {
+			_ = x.res.Release(id)
 		}
 	}
 	return nil
 }
 
+func ordersTouchedByTrades(aggressor domain.OrderID, newTrades []matching.GeneratedTrade) []domain.OrderID {
+	seen := map[domain.OrderID]struct{}{aggressor: {}}
+	out := []domain.OrderID{aggressor}
+	for _, gt := range newTrades {
+		for _, id := range []domain.OrderID{gt.Trade.BuyOrderID, gt.Trade.SellOrderID} {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// appendReservationStepsForSubmit journals reservation releases for the aggressor and
+// every resting order filled in newTrades so recovery matches live capacity.
 func (x *InstrumentExecutor) appendReservationStepsForSubmit(oid domain.OrderID, live *domain.Order, newTrades []matching.GeneratedTrade, steps *[]event.CommandStep) error {
-	r, ok := x.res.Get(oid)
-	if !ok {
+	// Track simulated remaining capacity per order as we emit steps (WAL order).
+	type cap struct {
+		cash domain.Money
+		pos  domain.Quantity
+	}
+	left := map[domain.OrderID]cap{}
+	ensure := func(id domain.OrderID) (cap, bool) {
+		if c, ok := left[id]; ok {
+			return c, true
+		}
+		r, ok := x.res.Get(id)
+		if !ok {
+			return cap{}, false
+		}
+		c := cap{cash: r.Cash, pos: r.PositionQuantity}
+		left[id] = c
+		return c, true
+	}
+	releasePartial := func(id domain.OrderID, cashPart domain.Money, posPart domain.Quantity) error {
+		c, ok := ensure(id)
+		if !ok {
+			return nil
+		}
+		if cashPart > c.cash {
+			cashPart = c.cash
+		}
+		if posPart > c.pos {
+			posPart = c.pos
+		}
+		if cashPart == 0 && posPart == 0 {
+			return nil
+		}
+		c.cash -= cashPart
+		c.pos -= posPart
+		left[id] = c
+		st, err := event.StepFromPayload(event.ReservationPartiallyReleasedPayload{
+			OrderID: id, CashReleased: cashPart, PositionQtyReleased: posPart,
+			CashRemaining: c.cash, PositionQtyRemaining: c.pos,
+		})
+		if err != nil {
+			return err
+		}
+		*steps = append(*steps, st)
 		return nil
 	}
-	cashLeft, posLeft := r.Cash, r.PositionQuantity
+
 	for _, gt := range newTrades {
 		tr := gt.Trade
-		if tr.BuyOrderID != oid {
-			continue
-		}
 		unit, err := x.instrument.MoneyFromPrice(tr.Price)
 		if err != nil {
 			return err
@@ -107,44 +166,54 @@ func (x *InstrumentExecutor) appendReservationStepsForSubmit(oid domain.OrderID,
 		if err != nil {
 			return err
 		}
-		if cashPart > cashLeft {
-			cashPart = cashLeft
+		// BUY side: release cash (and any buy position-capacity marker).
+		if err := releasePartial(tr.BuyOrderID, cashPart, tr.Quantity); err != nil {
+			return err
 		}
-		posPart := tr.Quantity
-		if posPart > posLeft {
-			posPart = posLeft
+		// SELL side: typically zero capacity; still emit if a non-zero sell reservation exists.
+		if err := releasePartial(tr.SellOrderID, 0, tr.Quantity); err != nil {
+			return err
 		}
-		if cashPart == 0 && posPart == 0 {
+	}
+
+	// Full residual release for any touched order that is fully filled after this batch.
+	for _, id := range ordersTouchedByTrades(oid, newTrades) {
+		var rem domain.Quantity
+		if id == oid {
+			rem = live.RemainingQuantity()
+		} else if o, ok := x.engine.GetOrder(id); ok {
+			rem = o.RemainingQuantity()
+		} else {
+			rem = 0 // filled and removed from book
+		}
+		if rem > 0 {
 			continue
 		}
-		cashLeft -= cashPart
-		posLeft -= posPart
-		st, err := event.StepFromPayload(event.ReservationPartiallyReleasedPayload{
-			OrderID: oid, CashReleased: cashPart, PositionQtyReleased: posPart,
-			CashRemaining: cashLeft, PositionQtyRemaining: posLeft,
-		})
-		if err != nil {
-			return err
+		c, ok := left[id]
+		if !ok {
+			// No partials emitted; still may need full residual clear from live store snapshot.
+			r, rok := x.res.Get(id)
+			if !rok || (r.Cash == 0 && r.PositionQuantity == 0) {
+				continue
+			}
+			c = cap{cash: r.Cash, pos: r.PositionQuantity}
 		}
-		*steps = append(*steps, st)
-	}
-	if live.RemainingQuantity() == 0 && (cashLeft > 0 || posLeft > 0) {
+		if c.cash == 0 && c.pos == 0 {
+			continue
+		}
 		st, err := event.StepFromPayload(event.ReservationReleasedPayload{
-			OrderID: oid, Cash: cashLeft, PositionQuantity: posLeft,
+			OrderID: id, Cash: c.cash, PositionQuantity: c.pos,
 		})
 		if err != nil {
 			return err
 		}
 		*steps = append(*steps, st)
+		left[id] = cap{}
 	}
 	return nil
 }
 
 func (x *InstrumentExecutor) applyLocalReservationAfterFill(tr domain.Trade) error {
-	r, ok := x.res.Get(tr.BuyOrderID)
-	if !ok {
-		return nil
-	}
 	unit, err := x.instrument.MoneyFromPrice(tr.Price)
 	if err != nil {
 		return err
@@ -153,17 +222,29 @@ func (x *InstrumentExecutor) applyLocalReservationAfterFill(tr domain.Trade) err
 	if err != nil {
 		return err
 	}
+	// BUY: cash (+ optional pos marker).
+	if err := x.releasePartialLocal(tr.BuyOrderID, cashPart, tr.Quantity); err != nil {
+		return err
+	}
+	// SELL: position capacity if any.
+	return x.releasePartialLocal(tr.SellOrderID, 0, tr.Quantity)
+}
+
+func (x *InstrumentExecutor) releasePartialLocal(id domain.OrderID, cashPart domain.Money, posPart domain.Quantity) error {
+	r, ok := x.res.Get(id)
+	if !ok {
+		return nil
+	}
 	if cashPart > r.Cash {
 		cashPart = r.Cash
 	}
-	posPart := tr.Quantity
 	if posPart > r.PositionQuantity {
 		posPart = r.PositionQuantity
 	}
 	if cashPart == 0 && posPart == 0 {
 		return nil
 	}
-	return x.res.ReleasePartial(tr.BuyOrderID, cashPart, posPart)
+	return x.res.ReleasePartial(id, cashPart, posPart)
 }
 
 func (x *InstrumentExecutor) commitCancelBatch(cmd CancelOrderCommand, rem domain.Quantity, ts time.Time) error {

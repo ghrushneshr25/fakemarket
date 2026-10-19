@@ -73,6 +73,35 @@ services:
       start_period: 8s
     restart: unless-stopped
 
+  # P10.3 — deterministic demo workload on real gRPC path (bufconn in-process).
+  # Exposes exchange /metrics on :9100 for Prometheus/Grafana; does not replace nodes.
+  sim:
+    image: fakemarket:local
+    container_name: fake-market-sim
+    depends_on:
+      node-a:
+        condition: service_started
+      prometheus:
+        condition: service_started
+    environment:
+      FAKEMARKET_ENV: production
+    entrypoint: ["/app/fakemarket-sim"]
+    command:
+      - -seed=42
+      - -scenario=normal
+      - -duration=2m
+      - -rate=50
+      - -clients=4
+      - -instruments=8
+      - -accounts=50
+      - -metrics-addr=:9100
+      - -wal=/data/sim-wal
+    ports:
+      - "9100:9100"
+    volumes:
+      - sim-data:/data
+    restart: "no"
+
   prometheus:
     image: prom/prometheus:v2.54.1
     container_name: fake-market-prometheus
@@ -114,5 +143,6 @@ volumes:
   node-a-data:
   node-b-data:
   node-c-data:
+  sim-data:
   prometheus-data:
   grafana-data:

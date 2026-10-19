@@ -76,9 +76,13 @@ docker-down:
 docker-logs:
 	docker compose logs -f node-a node-b node-c
 
-## sim: P10.3 deterministic trading simulator (demo workload, not P7 bench)
+## sim: P10.3 canonical demo (2m, 4 clients, 8 instruments) — not P7 bench
 sim:
-	$(GO) run ./cmd/fakemarket-sim -seed 42 -scenario normal -commands 800 -rate 400
+	$(GO) run ./cmd/fakemarket-sim -seed 42 -scenario normal -duration 2m -rate 50 -clients 4 -instruments 8 -accounts 50 -metrics-addr :9100
+
+## sim-quick: short deterministic check (fingerprint + trades + P8.6)
+sim-quick:
+	$(GO) run ./cmd/fakemarket-sim -seed 42 -scenario normal -commands 400 -rate 2000 -clients 4 -instruments 8
 
 ## bench: P7.4 short reproducible benches (not part of check duration)
 bench:

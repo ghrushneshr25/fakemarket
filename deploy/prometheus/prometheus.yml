@@ -15,3 +15,13 @@ scrape_configs:
           - node-c:8080
         labels:
           cluster: local
+  # P10.3: simulator embeds the real exchange stack and exposes its metrics registry.
+  - job_name: fakemarket-sim
+    metrics_path: /metrics
+    scrape_interval: 2s
+    static_configs:
+      - targets:
+          - sim:9100
+        labels:
+          cluster: local
+          role: simulator

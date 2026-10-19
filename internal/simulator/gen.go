@@ -48,9 +48,10 @@ type GenCmd struct {
 // Fingerprint hashes the command stream definition (not runtime order IDs).
 func Fingerprint(seed int64, cfg Config, cmds []GenCmd) string {
 	h := fnv.New64a()
-	_, _ = fmt.Fprintf(h, "seed=%d|sc=%s|rate=%g|cli=%d|inst=%d|acct=%d|cr=%g|mr=%g|ar=%g|n=%d\n",
-		seed, cfg.Scenario, cfg.RatePerSec, cfg.Clients, cfg.Instruments, cfg.Accounts,
-		cfg.CancelRate, cfg.MarketRate, cfg.AggressiveRate, len(cmds))
+	// Clients/shards/workers/WAL/metrics are runtime only — must not affect fingerprint.
+	_, _ = fmt.Fprintf(h, "seed=%d|sc=%s|rate=%g|inst=%d|acct=%d|cr=%g|mr=%g|ar=%g|cmds=%d|dur=%s|n=%d\n",
+		seed, cfg.Scenario, cfg.RatePerSec, cfg.Instruments, cfg.Accounts,
+		cfg.CancelRate, cfg.MarketRate, cfg.AggressiveRate, cfg.Commands, cfg.Duration, len(cmds))
 	for _, c := range cmds {
 		_, _ = fmt.Fprintf(h, "%d|%s|%s|%s|%s|%d|%d|%d\n",
 			c.Index, c.Kind, c.AccountID, c.InstrumentID, c.Side, c.Price, c.Quantity, c.CancelSlot)
@@ -137,7 +138,7 @@ func GenerateStream(cfg Config) []GenCmd {
 			side = domain.SideSell
 			acct = sellAcct
 		}
-		qty := domain.Quantity(1 + rng.Intn(10))
+		qty := domain.Quantity(QtyMin + rng.Intn(QtyMax-QtyMin+1))
 		ref := RefPrice(instIdx)
 
 		if rng.Bool(cfg.MarketRate) {
