@@ -1,0 +1,416 @@
+# HELP fakemarket_engine_phase_duration_seconds Nested engine phases (P7.2). phase=executor_wait|risk|matching|journal. Nested; NOT additive to TradingDuration
+# TYPE fakemarket_engine_phase_duration_seconds histogram
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="1e-05"} 18336
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="2.5e-05"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="5e-05"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.0001"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.00025"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.0005"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.001"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.0025"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.005"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.01"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.025"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.05"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.1"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.25"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="0.5"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="1"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="executor_wait",le="+Inf"} 18341
+fakemarket_engine_phase_duration_seconds_sum{operation="cancel",phase="executor_wait"} 0.002205245000000096
+fakemarket_engine_phase_duration_seconds_count{operation="cancel",phase="executor_wait"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="1e-05"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="2.5e-05"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="5e-05"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.0001"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.00025"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.0005"} 53
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.001"} 5347
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.0025"} 10055
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.005"} 13683
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.01"} 15551
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.025"} 17568
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.05"} 18284
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.1"} 18296
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.25"} 18297
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="0.5"} 18297
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="1"} 18297
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="journal",le="+Inf"} 18297
+fakemarket_engine_phase_duration_seconds_sum{operation="cancel",phase="journal"} 93.76513261300022
+fakemarket_engine_phase_duration_seconds_count{operation="cancel",phase="journal"} 18297
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="1e-05"} 310
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="2.5e-05"} 982
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="5e-05"} 2152
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.0001"} 4161
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.00025"} 7548
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.0005"} 10555
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.001"} 13824
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.0025"} 17660
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.005"} 18325
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.01"} 18332
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.025"} 18337
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.05"} 18339
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.1"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.25"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="0.5"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="1"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="cancel",phase="matching",le="+Inf"} 18341
+fakemarket_engine_phase_duration_seconds_sum{operation="cancel",phase="matching"} 12.604576760000041
+fakemarket_engine_phase_duration_seconds_count{operation="cancel",phase="matching"} 18341
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="1e-05"} 350735
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="2.5e-05"} 350772
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="5e-05"} 350776
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.0001"} 350777
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.00025"} 350777
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.0005"} 350777
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.001"} 350777
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.0025"} 350777
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.005"} 350777
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.01"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.025"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.05"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.1"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.25"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="0.5"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="1"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="executor_wait",le="+Inf"} 350778
+fakemarket_engine_phase_duration_seconds_sum{operation="submit",phase="executor_wait"} 0.03757939999987844
+fakemarket_engine_phase_duration_seconds_count{operation="submit",phase="executor_wait"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="1e-05"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="2.5e-05"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="5e-05"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.0001"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.00025"} 0
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.0005"} 1104
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.001"} 102867
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.0025"} 194263
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.005"} 262053
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.01"} 298103
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.025"} 337093
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.05"} 350385
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.1"} 350773
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.25"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="0.5"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="1"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="journal",le="+Inf"} 350778
+fakemarket_engine_phase_duration_seconds_sum{operation="submit",phase="journal"} 1792.6514073429896
+fakemarket_engine_phase_duration_seconds_count{operation="submit",phase="journal"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="1e-05"} 2705
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="2.5e-05"} 7818
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="5e-05"} 16925
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.0001"} 44642
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.00025"} 103474
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.0005"} 148444
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.001"} 201561
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.0025"} 307372
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.005"} 350440
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.01"} 350672
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.025"} 350739
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.05"} 350759
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.1"} 350776
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.25"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="0.5"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="1"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="matching",le="+Inf"} 350778
+fakemarket_engine_phase_duration_seconds_sum{operation="submit",phase="matching"} 378.8006143519967
+fakemarket_engine_phase_duration_seconds_count{operation="submit",phase="matching"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="1e-05"} 337190
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="2.5e-05"} 349127
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="5e-05"} 350088
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.0001"} 350528
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.00025"} 350737
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.0005"} 350750
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.001"} 350759
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.0025"} 350772
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.005"} 350774
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.01"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.025"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.05"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.1"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.25"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="0.5"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="1"} 350778
+fakemarket_engine_phase_duration_seconds_bucket{operation="submit",phase="risk",le="+Inf"} 350778
+fakemarket_engine_phase_duration_seconds_sum{operation="submit",phase="risk"} 1.3226865549999633
+fakemarket_engine_phase_duration_seconds_count{operation="submit",phase="risk"} 350778
+# HELP fakemarket_failover_duration_seconds Promotion duration
+# TYPE fakemarket_failover_duration_seconds histogram
+fakemarket_failover_duration_seconds_bucket{le="1e-05"} 0
+fakemarket_failover_duration_seconds_bucket{le="2.5e-05"} 0
+fakemarket_failover_duration_seconds_bucket{le="5e-05"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.0001"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.00025"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.0005"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.001"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.0025"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.005"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.01"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.025"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.05"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.1"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.25"} 0
+fakemarket_failover_duration_seconds_bucket{le="0.5"} 0
+fakemarket_failover_duration_seconds_bucket{le="1"} 0
+fakemarket_failover_duration_seconds_bucket{le="+Inf"} 0
+fakemarket_failover_duration_seconds_sum 0
+fakemarket_failover_duration_seconds_count 0
+# HELP fakemarket_grpc_server_rpc_duration_seconds SERVER-SIDE gRPC unary: interceptor entry→handler return (codec+Service). NOT client RTT / NOT pure network
+# TYPE fakemarket_grpc_server_rpc_duration_seconds histogram
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="1e-05"} 0
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="2.5e-05"} 0
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="5e-05"} 12
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.0001"} 15
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.00025"} 15
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.0005"} 17
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.001"} 1850
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.0025"} 4410
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.005"} 6955
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.01"} 10225
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.025"} 14631
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.05"} 17393
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.1"} 18315
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.25"} 18341
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="0.5"} 18341
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="1"} 18341
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="CancelOrder",transport="grpc",le="+Inf"} 18341
+fakemarket_grpc_server_rpc_duration_seconds_sum{operation="CancelOrder",transport="grpc"} 267.4436976
+fakemarket_grpc_server_rpc_duration_seconds_count{operation="CancelOrder",transport="grpc"} 18341
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="1e-05"} 0
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="2.5e-05"} 0
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="5e-05"} 0
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.0001"} 0
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.00025"} 0
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.0005"} 37
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.001"} 31663
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.0025"} 76595
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.005"} 124792
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.01"} 195062
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.025"} 278369
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.05"} 331281
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.1"} 350271
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.25"} 350773
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="0.5"} 350778
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="1"} 350778
+fakemarket_grpc_server_rpc_duration_seconds_bucket{operation="SubmitOrder",transport="grpc",le="+Inf"} 350778
+fakemarket_grpc_server_rpc_duration_seconds_sum{operation="SubmitOrder",transport="grpc"} 5236.05300800198
+fakemarket_grpc_server_rpc_duration_seconds_count{operation="SubmitOrder",transport="grpc"} 350778
+# HELP fakemarket_marketdata_clients Connected MD WebSocket clients
+# TYPE fakemarket_marketdata_clients gauge
+fakemarket_marketdata_clients 0
+# HELP fakemarket_marketdata_disconnects_total MD client disconnects
+# TYPE fakemarket_marketdata_disconnects_total counter
+fakemarket_marketdata_disconnects_total 0
+# HELP fakemarket_marketdata_events_total MD events published
+# TYPE fakemarket_marketdata_events_total counter
+fakemarket_marketdata_events_total 0
+# HELP fakemarket_marketdata_publish_duration_seconds Hub.Publish latency
+# TYPE fakemarket_marketdata_publish_duration_seconds histogram
+fakemarket_marketdata_publish_duration_seconds_bucket{le="1e-05"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="2.5e-05"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="5e-05"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.0001"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.00025"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.0005"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.001"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.0025"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.005"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.01"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.025"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.05"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.1"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.25"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="0.5"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="1"} 0
+fakemarket_marketdata_publish_duration_seconds_bucket{le="+Inf"} 0
+fakemarket_marketdata_publish_duration_seconds_sum 0
+fakemarket_marketdata_publish_duration_seconds_count 0
+# HELP fakemarket_marketdata_queue_full_total Client outbound queue full events
+# TYPE fakemarket_marketdata_queue_full_total counter
+fakemarket_marketdata_queue_full_total 0
+# HELP fakemarket_marketdata_recovery_attempts_total Gap recovery attempts
+# TYPE fakemarket_marketdata_recovery_attempts_total counter
+fakemarket_marketdata_recovery_attempts_total 0
+# HELP fakemarket_marketdata_recovery_duration_seconds Client recovery session duration
+# TYPE fakemarket_marketdata_recovery_duration_seconds histogram
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="1e-05"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="2.5e-05"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="5e-05"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.0001"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.00025"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.0005"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.001"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.0025"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.005"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.01"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.025"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.05"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.1"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.25"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="0.5"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="1"} 0
+fakemarket_marketdata_recovery_duration_seconds_bucket{le="+Inf"} 0
+fakemarket_marketdata_recovery_duration_seconds_sum 0
+fakemarket_marketdata_recovery_duration_seconds_count 0
+# HELP fakemarket_marketdata_recovery_failures_total Gap recovery failures
+# TYPE fakemarket_marketdata_recovery_failures_total counter
+fakemarket_marketdata_recovery_failures_total 0
+# HELP fakemarket_marketdata_snapshot_generation_duration_seconds Recovery snapshot generation
+# TYPE fakemarket_marketdata_snapshot_generation_duration_seconds histogram
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="1e-05"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="2.5e-05"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="5e-05"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.0001"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.00025"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.0005"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.001"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.0025"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.005"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.01"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.025"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.05"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.1"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.25"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="0.5"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="1"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_bucket{le="+Inf"} 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_sum 0
+fakemarket_marketdata_snapshot_generation_duration_seconds_count 0
+# HELP fakemarket_marketdata_subscriptions Active instrument subscriptions
+# TYPE fakemarket_marketdata_subscriptions gauge
+fakemarket_marketdata_subscriptions 0
+# HELP fakemarket_orders_accepted_total Orders accepted and journaled
+# TYPE fakemarket_orders_accepted_total counter
+fakemarket_orders_accepted_total 350778
+# HELP fakemarket_orders_cancelled_total Successful cancels
+# TYPE fakemarket_orders_cancelled_total counter
+fakemarket_orders_cancelled_total 18297
+# HELP fakemarket_orders_rejected_total Orders rejected before durable accept
+# TYPE fakemarket_orders_rejected_total counter
+fakemarket_orders_rejected_total 0
+# HELP fakemarket_orders_submitted_total Order submit attempts reaching the trading service
+# TYPE fakemarket_orders_submitted_total counter
+fakemarket_orders_submitted_total 350778
+# HELP fakemarket_ownership_acquire_total Shard ownership acquire attempts (P9.3)
+# TYPE fakemarket_ownership_acquire_total counter
+fakemarket_ownership_acquire_total{owner="worker-0",result="ok",shard="0"} 1
+fakemarket_ownership_acquire_total{owner="worker-0",result="ok",shard="2"} 1
+fakemarket_ownership_acquire_total{owner="worker-1",result="ok",shard="1"} 1
+fakemarket_ownership_acquire_total{owner="worker-1",result="ok",shard="3"} 1
+# HELP fakemarket_query_errors_total Query API errors
+# TYPE fakemarket_query_errors_total counter
+fakemarket_query_errors_total 0
+# HELP fakemarket_shard_instrument_registers_total Instrument registrations per shard
+# TYPE fakemarket_shard_instrument_registers_total counter
+fakemarket_shard_instrument_registers_total{shard="0"} 1
+fakemarket_shard_instrument_registers_total{shard="1"} 4
+fakemarket_shard_instrument_registers_total{shard="2"} 1
+fakemarket_shard_instrument_registers_total{shard="3"} 2
+# HELP fakemarket_shard_instruments Instruments owned by shard (P9.1)
+# TYPE fakemarket_shard_instruments gauge
+fakemarket_shard_instruments{shard="0"} 1
+fakemarket_shard_instruments{shard="1"} 4
+fakemarket_shard_instruments{shard="2"} 1
+fakemarket_shard_instruments{shard="3"} 2
+# HELP fakemarket_trades_total Trades executed
+# TYPE fakemarket_trades_total counter
+fakemarket_trades_total 0
+# HELP fakemarket_trading_command_duration_seconds Service-boundary trading latency (validation+risk+match+WAL); NOT pure matching; NOT gRPC network
+# TYPE fakemarket_trading_command_duration_seconds histogram
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="1e-05"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="2.5e-05"} 4
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="5e-05"} 13
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.0001"} 15
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.00025"} 15
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.0005"} 15
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.001"} 18
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.0025"} 23
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.005"} 25
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.01"} 31
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.025"} 36
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.05"} 41
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.1"} 44
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.25"} 44
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="0.5"} 44
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="1"} 44
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="error",le="+Inf"} 44
+fakemarket_trading_command_duration_seconds_sum{operation="cancel",result="error"} 0.5214063329999999
+fakemarket_trading_command_duration_seconds_count{operation="cancel",result="error"} 44
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="1e-05"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="2.5e-05"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="5e-05"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.0001"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.00025"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.0005"} 3
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.001"} 1871
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.0025"} 4400
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.005"} 6947
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.01"} 10200
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.025"} 14596
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.05"} 17352
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.1"} 18271
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.25"} 18297
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="0.5"} 18297
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="1"} 18297
+fakemarket_trading_command_duration_seconds_bucket{operation="cancel",result="ok",le="+Inf"} 18297
+fakemarket_trading_command_duration_seconds_sum{operation="cancel",result="ok"} 266.69544854499986
+fakemarket_trading_command_duration_seconds_count{operation="cancel",result="ok"} 18297
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="1e-05"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="2.5e-05"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="5e-05"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.0001"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.00025"} 0
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.0005"} 57
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.001"} 32572
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.0025"} 77040
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.005"} 125128
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.01"} 195259
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.025"} 278447
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.05"} 331308
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.1"} 350276
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.25"} 350773
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="0.5"} 350778
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="1"} 350778
+fakemarket_trading_command_duration_seconds_bucket{operation="submit",result="ok",le="+Inf"} 350778
+fakemarket_trading_command_duration_seconds_sum{operation="submit",result="ok"} 5228.3520832780805
+fakemarket_trading_command_duration_seconds_count{operation="submit",result="ok"} 350778
+# HELP fakemarket_trading_errors_total Trading path errors
+# TYPE fakemarket_trading_errors_total counter
+fakemarket_trading_errors_total{operation="cancel",result="error"} 44
+# HELP fakemarket_wal_append_duration_seconds WAL Append wall time including encode/write/flush and fsync when SyncOnAppend=true
+# TYPE fakemarket_wal_append_duration_seconds histogram
+fakemarket_wal_append_duration_seconds_bucket{le="1e-05"} 0
+fakemarket_wal_append_duration_seconds_bucket{le="2.5e-05"} 0
+fakemarket_wal_append_duration_seconds_bucket{le="5e-05"} 0
+fakemarket_wal_append_duration_seconds_bucket{le="0.0001"} 0
+fakemarket_wal_append_duration_seconds_bucket{le="0.00025"} 0
+fakemarket_wal_append_duration_seconds_bucket{le="0.0005"} 1649
+fakemarket_wal_append_duration_seconds_bucket{le="0.001"} 111457
+fakemarket_wal_append_duration_seconds_bucket{le="0.0025"} 205440
+fakemarket_wal_append_duration_seconds_bucket{le="0.005"} 276008
+fakemarket_wal_append_duration_seconds_bucket{le="0.01"} 313755
+fakemarket_wal_append_duration_seconds_bucket{le="0.025"} 354698
+fakemarket_wal_append_duration_seconds_bucket{le="0.05"} 368685
+fakemarket_wal_append_duration_seconds_bucket{le="0.1"} 369069
+fakemarket_wal_append_duration_seconds_bucket{le="0.25"} 369075
+fakemarket_wal_append_duration_seconds_bucket{le="0.5"} 369075
+fakemarket_wal_append_duration_seconds_bucket{le="1"} 369075
+fakemarket_wal_append_duration_seconds_bucket{le="+Inf"} 369075
+fakemarket_wal_append_duration_seconds_sum 1877.5895356319659
+fakemarket_wal_append_duration_seconds_count 369075
+# HELP fakemarket_wal_append_failures_total Failed WAL appends
+# TYPE fakemarket_wal_append_failures_total counter
+fakemarket_wal_append_failures_total 0
+# HELP fakemarket_wal_appends_total Successful WAL appends
+# TYPE fakemarket_wal_appends_total counter
+fakemarket_wal_appends_total 369075
+# HELP fakemarket_wal_bytes_written_total Bytes written to WAL
+# TYPE fakemarket_wal_bytes_written_total counter
+fakemarket_wal_bytes_written_total 2.46809481e+08
+# HELP fakemarket_worker_enqueues_total Commands enqueued to worker (P9.2)
+# TYPE fakemarket_worker_enqueues_total counter
+fakemarket_worker_enqueues_total{worker="0"} 86971
+fakemarket_worker_enqueues_total{worker="1"} 263807
+# HELP promhttp_metric_handler_errors_total Total number of internal errors encountered by the promhttp metric handler.
+# TYPE promhttp_metric_handler_errors_total counter
+promhttp_metric_handler_errors_total{cause="encoding"} 0
+promhttp_metric_handler_errors_total{cause="gathering"} 0

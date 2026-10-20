@@ -1,0 +1,50 @@
+# S1 — Resource-constrained scale baseline (isolated from production compose).
+# FakeMarket: 1 CPU / 1 GiB / GOMAXPROCS=1
+# Load generator: unconstrained separate container
+services:
+  fakemarket-scale:
+    build: .
+    image: fakemarket:local
+    container_name: fakemarket-s1
+    cpus: "1.0"
+    mem_limit: 1g
+    environment:
+      FAKEMARKET_ENV: production
+      FAKEMARKET_NODE_ID: scale-1
+      FAKEMARKET_HTTP_PORT: "8080"
+      FAKEMARKET_DATA_DIR: /data
+      FAKEMARKET_WAL_DIR: /data/wal
+      FAKEMARKET_CONSENSUS_DIR: /data/consensus
+      FAKEMARKET_TRADING_ENABLE: "1"
+      FAKEMARKET_GRPC_PORT: "50051"
+      FAKEMARKET_NUM_SHARDS: "4"
+      FAKEMARKET_NUM_WORKERS: "2"
+      FAKEMARKET_ACCOUNTS: "50"
+      FAKEMARKET_INSTRUMENTS: "8"
+      GOMAXPROCS: "1"
+    ports:
+      - "18080:8080"
+      - "15051:50051"
+    volumes:
+      - scale-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  # Unconstrained load generator (not under 1CPU/1GiB budget).
+  scale-gen:
+    build: .
+    image: fakemarket:local
+    depends_on:
+      fakemarket-scale:
+        condition: service_healthy
+    entrypoint: ["/app/fakemarket-scale"]
+    environment:
+      GOMAXPROCS: "4"
+    # docker compose run ... -target fakemarket-scale:50051
+
+volumes:
+  scale-data:

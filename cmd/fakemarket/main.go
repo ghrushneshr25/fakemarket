@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/app"
+	"github.com/ghrushneshr25/fakemarket/internal/server"
 	"github.com/ghrushneshr25/nexus"
 )
 
@@ -17,7 +19,6 @@ func main() {
 }
 
 func run() int {
-	// Process-edge values (env, logger) — not constructed inside nexus constructors.
 	cfg, err := app.LoadConfig()
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
@@ -26,24 +27,39 @@ func run() int {
 	log := app.NewDefaultLogger()
 	slog.SetDefault(log)
 
-	nexus.MustDeclareValue(cfg)
-	nexus.MustDeclareValue(log)
+	var tradingRT *app.TradingRuntime
+	var httpSrv app.HTTPServer
 
-	if err := nexus.Validate(); err != nil {
-		log.Error("nexus dependency graph invalid", "error", err)
-		return 1
+	if cfg.TradingEnable {
+		// S1 scale path: real BootstrapWorkers + TCP gRPC + exchange metrics on HTTP.
+		tradingRT, err = app.StartTradingRuntime(cfg, log)
+		if err != nil {
+			log.Error("trading runtime failed", "error", err)
+			return 1
+		}
+		httpSrv = server.New(cfg, log, func(mux *http.ServeMux) {
+			mux.Handle("GET /metrics", tradingRT.MetricsHandler())
+		})
+	} else {
+		// P10.1 packaging path unchanged (HTTP health/metrics shell).
+		nexus.MustDeclareValue(cfg)
+		nexus.MustDeclareValue(log)
+		if err := nexus.Validate(); err != nil {
+			log.Error("nexus dependency graph invalid", "error", err)
+			return 1
+		}
+		if err := nexus.Initialize(); err != nil {
+			log.Error("nexus initialize failed", "error", err)
+			return 1
+		}
+		httpSrv = nexus.MustGet(app.HTTPServerContract)
 	}
 
-	// Eager-build process singletons (metrics, HTTP server, route group).
-	if err := nexus.Initialize(); err != nil {
-		log.Error("nexus initialize failed", "error", err)
-		return 1
-	}
-
-	srv := nexus.MustGet(app.HTTPServerContract)
-
-	if err := srv.Start(); err != nil {
+	if err := httpSrv.Start(); err != nil {
 		log.Error("failed to start application", "error", err)
+		if tradingRT != nil {
+			_ = tradingRT.Shutdown(context.Background())
+		}
 		return 1
 	}
 
@@ -51,9 +67,14 @@ func run() int {
 	defer stop()
 	<-ctx.Done()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if tradingRT != nil {
+		if err := tradingRT.Shutdown(shutdownCtx); err != nil {
+			log.Error("trading shutdown failed", "error", err)
+		}
+	}
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		log.Error("graceful shutdown failed", "error", err)
 		return 1
 	}
