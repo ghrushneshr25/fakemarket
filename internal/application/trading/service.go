@@ -27,6 +27,7 @@ type Service struct {
 	router    *Router
 	idem      *IdempotencyStore
 	ready     atomic.Bool
+	inflight  atomic.Int64      // commands past Ready that have not returned (SN1 barrier)
 	metrics   *metrics.Registry // optional; nil = no instrumentation
 	log       *slog.Logger      // optional structured lifecycle logs
 	authority AuthorityGate     // optional P9.5 fence; checked on every Submit/Cancel
@@ -64,6 +65,33 @@ func (s *Service) WithAuthority(g AuthorityGate) *Service {
 // SetReady controls command admission (startup gate). Safe for concurrent use.
 func (s *Service) SetReady(v bool) { s.ready.Store(v) }
 
+// Ready reports whether new commands are admitted.
+func (s *Service) Ready() bool { return s != nil && s.ready.Load() }
+
+// InFlight returns the number of Submit/Cancel calls past the Ready check that have not returned.
+func (s *Service) InFlight() int64 {
+	if s == nil {
+		return 0
+	}
+	return s.inflight.Load()
+}
+
+// WaitIdle blocks until InFlight == 0 or ctx is done (SN1 barrier drain).
+func (s *Service) WaitIdle(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	for {
+		if s.inflight.Load() == 0 {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("%w: %w", ErrBarrierTimeout, err)
+		}
+		time.Sleep(100 * time.Microsecond)
+	}
+}
+
 // checkAuthority runs the structural failover gate (no-op if authority unset).
 func (s *Service) checkAuthority() error {
 	if s == nil || s.authority == nil {
@@ -87,6 +115,15 @@ func (s *Service) Submit(ctx context.Context, cmd SubmitOrderCommand) (SubmitOrd
 		s.observeSubmit(metrics.ResultError, start)
 		return SubmitOrderResult{}, ErrNotReady
 	}
+	// Double-check after inflight so barrier WaitIdle cannot miss a racing admit.
+	s.inflight.Add(1)
+	if !s.ready.Load() {
+		s.inflight.Add(-1)
+		s.logSubmit(cmd, "", "error", ErrNotReady)
+		s.observeSubmit(metrics.ResultError, start)
+		return SubmitOrderResult{}, ErrNotReady
+	}
+	defer s.inflight.Add(-1)
 	if err := s.checkAuthority(); err != nil {
 		s.logSubmit(cmd, "", "error", err)
 		s.observeSubmit(metrics.ResultError, start)
@@ -147,6 +184,14 @@ func (s *Service) Cancel(ctx context.Context, cmd CancelOrderCommand) (CancelOrd
 		s.observeCancel(metrics.ResultError, start)
 		return CancelOrderResult{}, ErrNotReady
 	}
+	s.inflight.Add(1)
+	if !s.ready.Load() {
+		s.inflight.Add(-1)
+		s.logCancel(cmd, "error", ErrNotReady)
+		s.observeCancel(metrics.ResultError, start)
+		return CancelOrderResult{}, ErrNotReady
+	}
+	defer s.inflight.Add(-1)
 	if err := s.checkAuthority(); err != nil {
 		s.logCancel(cmd, "error", err)
 		s.observeCancel(metrics.ResultError, start)

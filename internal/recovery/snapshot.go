@@ -7,10 +7,8 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
-	"strconv"
-	"strings"
+	"time"
 
 	"github.com/ghrushneshr25/fakemarket/internal/book"
 	"github.com/ghrushneshr25/fakemarket/internal/domain"
@@ -209,19 +207,51 @@ func RestoreSnapshot(p snapPayload, instruments *domain.InstrumentRegistry) (*St
 	}
 
 	for _, t := range p.Trades {
+		ts := time.Unix(0, t.TimestampUnixNano).UTC()
+		if t.TimestampUnixNano == 0 {
+			// Legacy snapshots omitted trade timestamps; use stable sentinel for structural validity.
+			ts = time.Unix(0, 1).UTC()
+		}
 		tr, err := domain.NewTrade(domain.TradeParams{
 			ID: domain.TradeID(t.ID), InstrumentID: domain.InstrumentID(t.Instrument),
 			BuyOrderID: domain.OrderID(t.Buy), SellOrderID: domain.OrderID(t.Sell),
 			Price: domain.Price(t.Price), Quantity: domain.Quantity(t.Qty),
-			Sequence: domain.Sequence(t.Sequence),
+			Sequence: domain.Sequence(t.Sequence), Timestamp: ts,
 		})
 		if err != nil {
 			return nil, err
 		}
 		s.Trades = append(s.Trades, tr)
 	}
-	// Executions stored as lightweight facts — skip full domain rebuild if NewExecution is strict;
-	// trades are enough for canonical compare of trade list. Executions optional in snapshot compare.
+	// Rebuild executions for P8.6 overfill/execution-sum checks. Prefer stored wires;
+	// if absent (legacy), derive pairs from trades.
+	if len(p.Executions) > 0 {
+		for _, e := range p.Executions {
+			ts := time.Unix(0, 1).UTC()
+			ex, err := domain.NewExecution(domain.ExecutionParams{
+				ID: domain.ExecutionID(e.ID), TradeID: domain.TradeID(e.TradeID),
+				OrderID: domain.OrderID(e.OrderID), InstrumentID: domain.InstrumentID(e.Instrument),
+				Side: domain.Side(e.Side), Price: domain.Price(e.Price), Quantity: domain.Quantity(e.Qty),
+				Sequence: domain.Sequence(e.Sequence), Timestamp: ts,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("%w: execution %s: %w", ErrInvalidSnapshot, e.ID, err)
+			}
+			s.Executions = append(s.Executions, ex)
+		}
+	} else {
+		for _, tr := range s.Trades {
+			buyEx, sellEx, err := domain.PairExecutionsForTrade(tr,
+				domain.ExecutionID("EXE-B-"+string(tr.ID)),
+				domain.ExecutionID("EXE-S-"+string(tr.ID)),
+				tr.Sequence, tr.Sequence,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("%w: derive exec: %w", ErrInvalidSnapshot, err)
+			}
+			s.Executions = append(s.Executions, buyEx, sellEx)
+		}
+	}
 	_ = event.TypeOrderAccepted
 
 	if err := validateFinal(s); err != nil {
@@ -326,54 +356,34 @@ func placeLevel(s *State, lv LevelSnap, side domain.Side) error {
 	return nil
 }
 
-// WriteSnapshotAtomically writes framed bytes via temp + sync + rename.
+// WriteSnapshotAtomically writes framed bytes via temp + sync + rename + verify.
+// Prefer PublishSnapshotAtomically when a manifest is required (SN1).
 func WriteSnapshotAtomically(dir string, seq domain.Sequence, raw []byte) (path string, err error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	name := fmt.Sprintf("snapshot-%016d.snap", uint64(seq))
-	final := filepath.Join(dir, name)
-	tmp := final + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	res, err := PublishSnapshotAtomically(dir, seq, raw, PublishOptions{SkipManifest: true})
 	if err != nil {
 		return "", err
 	}
-	if _, err := f.Write(raw); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
-		return "", err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
-		return "", err
-	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(tmp)
-		return "", err
-	}
-	if err := os.Rename(tmp, final); err != nil {
-		_ = os.Remove(tmp)
-		return "", err
-	}
-	// best-effort dir sync
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return final, nil
+	return res.SnapshotPath, nil
 }
 
-// CreateSnapshot encodes and atomically publishes a snapshot of s.
+// CreateSnapshot encodes and atomically publishes a snapshot of s (with manifest).
 func CreateSnapshot(dir string, s *State) (string, error) {
-	raw, err := EncodeSnapshot(s)
+	res, err := CreateSnapshotEncoded(dir, s, PublishOptions{})
 	if err != nil {
 		return "", err
 	}
-	return WriteSnapshotAtomically(dir, s.LastEventSequence, raw)
+	return res.SnapshotPath, nil
 }
 
-// LoadSnapshot reads and validates a snapshot file, restores State.
+// CreateSnapshotWithOptions is CreateSnapshot with explicit publish options.
+func CreateSnapshotWithOptions(dir string, s *State, opts PublishOptions) (*PublishResult, error) {
+	return CreateSnapshotEncoded(dir, s, opts)
+}
+
+// LoadSnapshot reads and validates a snapshot file by explicit path, restores State.
+// This proves the file is decodable — it does NOT mean the checkpoint is discovery-eligible.
+// Eligible published checkpoints require ListPublishedCheckpoints / ValidatePublishedCheckpoint
+// (valid verified matching manifest + snap CRC bind).
 func LoadSnapshot(path string, instruments *domain.InstrumentRegistry) (*State, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -393,38 +403,13 @@ func LoadSnapshot(path string, instruments *domain.InstrumentRegistry) (*State, 
 	return st, nil
 }
 
-// listSnapshots returns paths sorted by sequence descending (newest first).
-func listSnapshots(dir string) ([]string, error) {
-	ents, err := os.ReadDir(dir)
+// LoadPublishedCheckpoint loads State only if dir has a fully published eligible checkpoint at seq.
+func LoadPublishedCheckpoint(dir string, seq uint64, instruments *domain.InstrumentRegistry) (*State, error) {
+	pc, err := ValidatePublishedCheckpoint(dir, seq)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	type cand struct {
-		seq  uint64
-		path string
-	}
-	var cs []cand
-	for _, e := range ents {
-		name := e.Name()
-		if !strings.HasPrefix(name, "snapshot-") || !strings.HasSuffix(name, ".snap") {
-			continue
-		}
-		mid := strings.TrimSuffix(strings.TrimPrefix(name, "snapshot-"), ".snap")
-		seq, err := strconv.ParseUint(mid, 10, 64)
-		if err != nil {
-			continue
-		}
-		cs = append(cs, cand{seq: seq, path: filepath.Join(dir, name)})
-	}
-	sort.Slice(cs, func(i, j int) bool { return cs[i].seq > cs[j].seq })
-	out := make([]string, len(cs))
-	for i := range cs {
-		out[i] = cs[i].path
-	}
-	return out, nil
+	return LoadSnapshot(pc.SnapshotPath, instruments)
 }
 
 // SnapshotRecoverResult includes path metadata.
@@ -435,7 +420,8 @@ type SnapshotRecoverResult struct {
 	FallbackFull bool
 }
 
-// RecoverWithSnapshot tries newest valid snapshot then WAL suffix via ApplyEvent.
+// RecoverWithSnapshot tries newest eligible published checkpoint then WAL suffix via ApplyEvent.
+// Eligibility requires snap + verified matching manifest (see ListPublishedCheckpoints).
 // On snapshot failure with FallbackFull, uses full RecoverDir (Strict).
 // Never treats corrupt WAL suffix as success by dropping history.
 func RecoverWithSnapshot(cfg Config, snapDir string, fallbackFull bool) (*SnapshotRecoverResult, error) {

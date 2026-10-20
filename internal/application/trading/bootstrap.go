@@ -31,6 +31,9 @@ type BootstrapResult struct {
 	NumWorkers int
 	// Pool is the multi-worker pool when NumWorkers >= 1.
 	Pool *WorkerPool
+	// barrier is lazy-init for SN1 consistent snapshot capture.
+	barrierOnce sync.Once
+	barrier     *Barrier
 }
 
 // BootstrapConfig optional knobs for BootstrapMultiCfg (P9.1 / P9.2).

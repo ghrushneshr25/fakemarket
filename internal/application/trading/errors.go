@@ -15,4 +15,8 @@ var (
 	ErrIdempotencyConflict = errors.New("idempotency key reused with different command")
 	ErrBackpressure        = errors.New("trading service overloaded")
 	ErrEngineUnavailable   = errors.New("execution context unavailable")
+	// Snapshot / barrier (SN1)
+	ErrSnapshotCapture    = errors.New("snapshot capture failed")
+	ErrSnapshotInProgress = errors.New("snapshot capture already in progress")
+	ErrBarrierTimeout     = errors.New("execution barrier drain timeout")
 )

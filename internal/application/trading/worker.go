@@ -76,13 +76,14 @@ type workResult struct {
 // instrumentRunner is a single-goroutine FIFO queue for one InstrumentID.
 // Preserves per-instrument ordering; different instruments run concurrently.
 type instrumentRunner struct {
-	id    domain.InstrumentID
-	shard ShardID
-	ex    *InstrumentExecutor
-	w     *Worker // for ownership re-validation at exec time
-	q     chan workItem
-	done  chan struct{}
-	wg    sync.WaitGroup
+	id       domain.InstrumentID
+	shard    ShardID
+	ex       *InstrumentExecutor
+	w        *Worker // for ownership re-validation at exec time
+	q        chan workItem
+	done     chan struct{}
+	wg       sync.WaitGroup
+	inflight atomic.Int32 // work items currently in exec (SN1 quiesce)
 }
 
 func newInstrumentRunner(id domain.InstrumentID, shard ShardID, ex *InstrumentExecutor, w *Worker, cap int) *instrumentRunner {
@@ -118,6 +119,8 @@ func (r *instrumentRunner) loop() {
 }
 
 func (r *instrumentRunner) exec(item workItem) {
+	r.inflight.Add(1)
+	defer r.inflight.Add(-1)
 	var res workResult
 	// Fencing at execution time (before matching / reservation / WAL mutation).
 	if r.w != nil {
@@ -144,6 +147,10 @@ func (r *instrumentRunner) exec(item workItem) {
 	case item.resCh <- res:
 	default:
 	}
+}
+
+func (r *instrumentRunner) busy() bool {
+	return len(r.q) > 0 || r.inflight.Load() > 0
 }
 
 func (r *instrumentRunner) enqueue(w workItem) error {
@@ -473,6 +480,41 @@ func (p *WorkerPool) Stop() {
 			w.mu.Unlock()
 		}
 	}
+}
+
+// Quiesce waits until all instrument queues are empty and no exec is in flight.
+// Does NOT stop runners or release ownership (SN1 global barrier).
+// Callers must SetReady(false) first so no new work is admitted.
+func (p *WorkerPool) Quiesce(ctx context.Context) error {
+	if p == nil {
+		return nil
+	}
+	for {
+		if !p.busy() {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("%w: %w", ErrBarrierTimeout, err)
+		}
+		time.Sleep(100 * time.Microsecond)
+	}
+}
+
+func (p *WorkerPool) busy() bool {
+	if p == nil {
+		return false
+	}
+	for _, w := range p.workers {
+		w.mu.RLock()
+		for _, r := range w.run {
+			if r.busy() {
+				w.mu.RUnlock()
+				return true
+			}
+		}
+		w.mu.RUnlock()
+	}
+	return false
 }
 
 // NumWorkers returns configured worker count.

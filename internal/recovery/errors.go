@@ -24,10 +24,17 @@ var (
 	ErrSequenceMismatch          = errors.New("recovery sequence mismatch")
 	ErrPartialState              = errors.New("partial recovery state not publishable")
 
-	// Snapshots (P5.6)
+	// Snapshots (P5.6 / SN1)
 	ErrInvalidSnapshot        = errors.New("invalid snapshot")
 	ErrSnapshotCorrupt        = errors.New("snapshot corrupt")
 	ErrUnsupportedSnapVersion = errors.New("unsupported snapshot version")
 	ErrSnapshotSequence       = errors.New("snapshot sequence mismatch")
 	ErrSnapshotIncompatible   = errors.New("snapshot incompatible with wal")
+	ErrSnapshotTooLarge       = errors.New("snapshot exceeds size bound")
+	ErrSnapshotIncomplete     = errors.New("incomplete snapshot")
+	ErrSnapshotPublish        = errors.New("snapshot publish failed")
+	ErrSnapshotPath           = errors.New("invalid snapshot path")
+	// ErrSnapshotNotEligible: decodable file that is not a fully published checkpoint
+	// (missing/invalid manifest, checksum mismatch, temp, etc.).
+	ErrSnapshotNotEligible = errors.New("snapshot not eligible as published checkpoint")
 )

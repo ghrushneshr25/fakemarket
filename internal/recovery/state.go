@@ -79,6 +79,8 @@ type TradeSnap struct {
 	ID, Instrument, Buy, Sell string
 	Price, Qty                int64
 	Sequence                  uint64
+	// TimestampUnixNano is trade observation time (not matching priority). 0 = unknown/legacy.
+	TimestampUnixNano int64 `json:"ts_unix_nano,omitempty"`
 }
 
 type AccountSnap struct {
@@ -132,10 +134,15 @@ func (s *State) Snapshot() Canonical {
 		})
 	}
 	for _, t := range s.Trades {
+		ts := int64(0)
+		if !t.Timestamp.IsZero() {
+			ts = t.Timestamp.UTC().UnixNano()
+		}
 		c.Trades = append(c.Trades, TradeSnap{
 			ID: string(t.ID), Instrument: string(t.InstrumentID),
 			Buy: string(t.BuyOrderID), Sell: string(t.SellOrderID),
 			Price: int64(t.Price), Qty: int64(t.Quantity), Sequence: uint64(t.Sequence),
+			TimestampUnixNano: ts,
 		})
 	}
 	aids := make([]string, 0, len(s.Accounts))
@@ -196,6 +203,7 @@ func (s *State) Snapshot() Canonical {
 }
 
 // CompareCanonical returns nil if equal.
+// Trade observation timestamps are ignored (not matching priority / financial identity).
 func CompareCanonical(a, b Canonical) error {
 	if a.LastSequence != b.LastSequence || a.EventsApplied != b.EventsApplied {
 		return fmt.Errorf("%w: meta seq/applied", ErrRecoveryFailed)
@@ -203,7 +211,7 @@ func CompareCanonical(a, b Canonical) error {
 	if fmt.Sprint(a.Orders) != fmt.Sprint(b.Orders) {
 		return fmt.Errorf("%w: orders", ErrRecoveryFailed)
 	}
-	if fmt.Sprint(a.Trades) != fmt.Sprint(b.Trades) {
+	if !tradesFinanciallyEqual(a.Trades, b.Trades) {
 		return fmt.Errorf("%w: trades", ErrRecoveryFailed)
 	}
 	if fmt.Sprint(a.Accounts) != fmt.Sprint(b.Accounts) {
@@ -219,4 +227,18 @@ func CompareCanonical(a, b Canonical) error {
 		return fmt.Errorf("%w: asks", ErrRecoveryFailed)
 	}
 	return nil
+}
+
+func tradesFinanciallyEqual(a, b []TradeSnap) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		x, y := a[i], b[i]
+		if x.ID != y.ID || x.Instrument != y.Instrument || x.Buy != y.Buy || x.Sell != y.Sell ||
+			x.Price != y.Price || x.Qty != y.Qty || x.Sequence != y.Sequence {
+			return false
+		}
+	}
+	return true
 }

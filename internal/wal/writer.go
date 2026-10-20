@@ -724,6 +724,14 @@ func (w *Writer) rotateLocked() error {
 	return w.openNextSegment()
 }
 
+// Dir returns the WAL directory path.
+func (w *Writer) Dir() string {
+	if w == nil {
+		return ""
+	}
+	return w.cfg.Dir
+}
+
 // LastSequence returns the last durably committed Event.Sequence (0 if none).
 func (w *Writer) LastSequence() uint64 {
 	w.mu.Lock()
