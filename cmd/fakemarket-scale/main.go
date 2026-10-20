@@ -112,11 +112,9 @@ func run() int {
 	var offeredCount, completedMeasure int64
 	lat := &latencyBuf{maxN: 3_000_000}
 
-	qsize := 4096
+	qsize := 65536
 	if *maxInflight > 0 {
 		qsize = *maxInflight + *clients + 8
-	} else {
-		qsize = 65536
 	}
 	jobs := make(chan job, qsize)
 	orderIDs := make([]string, len(cmds))
